@@ -75,8 +75,9 @@ chezmoi's core idea is right: declare what the home directory should look like, 
 diff against reality, apply the minimum changes. Files, directories, symlinks, and
 permissions are all expressed as desired state, not as imperative scripts.
 
-Crucible adopts this model for dotfile management. The source directory is the truth. The
-tool computes target state, diffs against actual state, and applies.
+Crucible adopts this model for dotfile management. The source directory holds config files
+and a `crucible.js` script that programmatically declares desired system state. The tool
+executes the script, collects declarations, diffs against actual state, and applies.
 
 ### Atomic Writes
 
@@ -89,11 +90,13 @@ same. This is especially important for files read on every shell invocation (`.b
 
 A single source tree with templates that evaluate differently per machine is the right
 approach. Branches-per-machine diverges. Separate directories-per-machine duplicates.
-Templates express differences inline, at the point of divergence.
 
-Crucible uses Go's `text/template` (consistent with the implementation language) with
-access to system facts as template data. The same fact system that powers operations also
-powers templates -- `.OS`, `.Arch`, `.Hostname`, and any custom data from config.
+Crucible provides two template mechanisms:
+
+1. **JavaScript template literals** (primary) -- users write inline content in `crucible.js`
+   with `${}` interpolation and full access to system facts. This is just JavaScript.
+2. **Go `text/template`** (secondary) -- for large config files stored in the source dir.
+   The `template` option in `c.file()` renders a `.tmpl` file with user-provided data.
 
 ### Secret Management
 
@@ -140,10 +143,9 @@ but it means your source tree doesn't look like your home directory. The mental 
 `dot_bashrc` to `.bashrc` is trivial; the mapping from
 `exact_dot_config/private_dot_gnupg/encrypted_private_gpg-keys` is not.
 
-Crucible keeps source files named as they are in the target. `.bashrc` in source becomes
-`.bashrc` in home. Metadata -- permissions, encryption, template status, ownership -- is
-declared in configuration, not encoded in filenames. The source tree is a readable mirror of
-the target structure.
+Crucible keeps source files named as they are in the target. Metadata -- permissions,
+encryption, template status, ownership -- is declared in the `crucible.js` script, not
+encoded in filenames. The source tree is a readable mirror of the target structure.
 
 ### `chezmoi cd` / `chezmoi git`
 
@@ -159,12 +161,63 @@ are unnecessary.
 
 Like pyinfra, crucible separates planning from execution:
 
-1. **Plan**: Collect facts (real system state), evaluate desired state (source files +
-   templates + config), compute the diff, produce an action list.
+1. **Plan**: Execute `crucible.js` to collect declarations, gather facts (real system state),
+   compute the diff between declarations and reality, produce an action list.
 2. **Execute**: Apply the action list to the system.
 
 `crucible apply` runs both phases. `crucible plan` (or `--dry-run`) runs only phase 1 and
 displays the action list. The plan phase never modifies the system.
+
+### JavaScript Scripting Engine
+
+Crucible uses a JavaScript scripting engine (Goja) to let users programmatically declare
+desired system state. Users write `crucible.js` files that use CommonJS `require()` to load
+crucible modules:
+
+```javascript
+const c = require("crucible");
+const facts = require("crucible/facts");
+
+// Conditional logic — the whole point of scripting
+if (facts.os.name === "darwin") {
+    c.brew("coreutils");
+    c.brew("firefox", { type: "cask" });
+}
+
+// Files — inline content via JS template literals
+c.file("~/.gitconfig", {
+    content: `[user]\n  name = Ryan\n  email = ${facts.os.hostname === "work" ? "work@co.com" : "me@home.com"}`,
+    mode: 0o644,
+});
+
+// Files — from source directory
+c.file("~/.config/fish/config.fish", {
+    source: "fish/config.fish",
+    mode: 0o644,
+});
+
+// Files — Go templates for large configs
+c.file("~/.config/starship.toml", {
+    template: "starship.toml.tmpl",
+    data: { prompt: ">" },
+});
+
+// Symlinks
+c.symlink("~/.vimrc", { target: "~/.config/nvim/init.vim" });
+
+// Directories
+c.dir("~/.config/fish", { mode: 0o755 });
+
+// Require other scripts for organization
+require("./work-setup");
+```
+
+Five declaration functions: `file`, `dir`, `symlink`, `brew`, `log`. No `exec()` --
+declarations only, keeping dry runs trustworthy.
+
+Scripts declare desired state; they do not perform side effects. The engine diffs
+declarations against reality and applies the difference -- the same plan/apply pipeline,
+with a scripting front-end.
 
 ### Facts
 
@@ -182,9 +235,8 @@ Facts are collected during the plan phase and cached for the duration of that ph
 return structured data, not raw strings. A file fact returns a struct with hash, mode, uid,
 gid, mtime -- not the output of `stat`.
 
-Facts are the template data source. When a `.tmpl` file is evaluated, it has access to
-collected facts as template variables. This means the same system introspection that powers
-operations also powers conditional configuration.
+Facts are exposed to scripts via the `crucible/facts` module. Scripts access facts like
+`facts.os.name`, `facts.homebrew.formulae`, `facts.file(path)`, etc.
 
 ### Operations
 
@@ -202,76 +254,48 @@ composition abstraction -- they are functions that return data.
 
 ### Source Directory
 
-The source directory is a normal directory tree that mirrors the target structure. It lives
-wherever you put it -- likely a git repo in your home directory or a projects folder.
+The source directory is a normal directory tree. It lives wherever you put it -- likely a
+git repo in your home directory or a projects folder. The `crucible.js` entry point drives
+what gets managed. Source files referenced by scripts live alongside the script.
 
 ```
 my-dotfiles/
-├── crucible.yaml          # Configuration: managed paths, metadata, data
-├── .bashrc                # → ~/.bashrc
-├── .config/
-│   ├── git/
-│   │   └── config         # → ~/.config/git/config
-│   └── starship.toml.tmpl # → ~/.config/starship.toml (template-evaluated)
-├── .ssh/
-│   └── config.tmpl        # → ~/.ssh/config (template-evaluated)
-└── packages.yaml          # Package declarations (optional)
+├── crucible.js               # Script declaring desired state
+├── work-setup.js             # Optional sub-module for organization
+├── fish/
+│   └── config.fish           # Referenced via { source: "fish/config.fish" }
+├── starship.toml.tmpl        # Go template for large configs
+└── .ssh/
+    └── config.tmpl           # Go template referenced via { template: ".ssh/config.tmpl" }
 ```
 
-Files are named as they appear in the target. The `.tmpl` suffix is the only filename
-convention -- it signals template evaluation and is stripped from the target path.
-
-### Configuration File
-
-`crucible.yaml` declares metadata that chezmoi encodes in filenames:
-
-```yaml
-target: ~/                    # Where files are applied
-
-files:
-  .ssh/config:
-    permissions: 0600
-    template: true            # Alternative to .tmpl suffix
-  .ssh/id_rsa:
-    permissions: 0600
-    encrypted: true
-  .config/fontconfig/:
-    exact: true               # Remove unmanaged children
-
-data:
-  email: "user@example.com"   # Template data
-  is_work: false
-
-secrets:
-  provider: 1password         # Secret resolution backend
-
-packages:
-  homebrew:
-    - ripgrep
-    - fd
-    - starship
-```
-
-Most files need no configuration entry. If a file exists in the source directory with no
-entry in `crucible.yaml`, it's managed with default permissions and no special treatment.
-Configuration is for the exceptions.
+If no `crucible.js` exists, the engine falls back to walk-based file sync -- mirroring the
+source directory into the target directory. This preserves backward compatibility.
 
 ### What Gets Applied
 
 The apply process:
 
-1. Read `crucible.yaml` to determine source directory contents and target root.
-2. Walk the source directory. For each file/directory:
-   a. Determine target path (source path relative to source root, applied under target root).
-   b. If `.tmpl` suffix or `template: true` in config, evaluate as Go template with
-      facts + data as context. Strip `.tmpl` suffix from target path.
-   c. If `encrypted: true`, decrypt.
-   d. Collect facts for the target path (existence, hash, permissions, ownership).
-   e. Run the file operation: compare desired content/permissions to actual. Produce actions
-      for any differences.
-3. If packages are declared, collect package facts (what's installed), diff against desired,
-   produce install/remove actions.
-4. Display the action list (plan mode) or execute it (apply mode).
+1. Check for `crucible.js` in the source directory.
+   - If absent, fall back to walk-based file sync (mirror source → target).
+   - If present, execute the script-driven pipeline:
+
+2. Pre-collect expensive facts concurrently (OS info, Homebrew state).
+
+3. Execute `crucible.js`:
+   - JS calls to `c.file()`, `c.brew()`, etc. accumulate declarations.
+   - `require()` loads sub-modules for organization.
+
+4. Resolve content:
+   - Declarations with `source` references → read file from source dir.
+   - Declarations with `template` references → render Go template.
+
+5. Diff declarations against system state:
+   - Each declaration maps to a Desired* struct.
+   - Each Diff function compares desired vs actual (via fact collectors).
+   - Actions are produced only for differences.
+
+6. Display the action list (plan mode) or execute it (apply mode).
 
 ### CLI
 
@@ -290,10 +314,11 @@ git by being in the git repo.
 
 ### Extensibility
 
-Custom facts and operations are Go code. A fact implements an interface (collect method
-returning structured data). An operation is a function with a specific signature. There is
-no plugin system, registration mechanism, or dynamic loading -- you add code to the project
-and it's available.
+The scripting engine provides the primary extensibility mechanism -- users write JavaScript
+for custom logic, conditional configuration, and organizational structure. For system-level
+extensions (new fact collectors, new action types), Go code is added directly to the
+project. There is no plugin system, registration mechanism, or dynamic loading -- you add
+code to the project and it's available.
 
 This is appropriate for a tool where the user is the developer. If crucible grows to need
 third-party extensibility, that can be designed then. Premature plugin architecture is

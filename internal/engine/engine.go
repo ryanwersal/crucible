@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -10,8 +11,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/ryanwersal/crucible/internal/action"
 	"github.com/ryanwersal/crucible/internal/fact"
+	"github.com/ryanwersal/crucible/internal/script"
 )
 
 // Engine implements the two-phase plan/apply pipeline.
@@ -41,9 +45,24 @@ func (e *Engine) SetOutput(stdout, stderr io.Writer) {
 }
 
 // Plan walks the source directory, collects facts about corresponding target
-// paths, and returns the actions needed to reconcile them.
+// paths, and returns the actions needed to reconcile them. If a crucible.js
+// entry point exists, script-driven planning is used instead.
 func (e *Engine) Plan(ctx context.Context) ([]action.Action, error) {
 	store := fact.NewStore()
+
+	loader := script.NewLoader(e.sourceDir)
+	_, content, err := loader.EntryPoint()
+	if errors.Is(err, script.ErrNoScript) {
+		return e.planWalk(ctx, store)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load script: %w", err)
+	}
+	return e.planScript(ctx, store, content)
+}
+
+// planWalk is the original WalkDir-based planning logic.
+func (e *Engine) planWalk(ctx context.Context, store *fact.Store) ([]action.Action, error) {
 	var actions []action.Action
 
 	err := filepath.WalkDir(e.sourceDir, func(path string, d fs.DirEntry, err error) error {
@@ -59,7 +78,7 @@ func (e *Engine) Plan(ctx context.Context) ([]action.Action, error) {
 			}
 			return nil
 		}
-		if name == "crucible.yaml" && filepath.Dir(path) == e.sourceDir {
+		if filepath.Dir(path) == e.sourceDir && (name == "crucible.yaml" || name == "crucible.js") {
 			return nil
 		}
 
@@ -130,6 +149,113 @@ func (e *Engine) Plan(ctx context.Context) ([]action.Action, error) {
 	})
 	if err != nil {
 		return nil, fmt.Errorf("walk source: %w", err)
+	}
+
+	return actions, nil
+}
+
+// planScript executes a crucible.js script and converts the resulting
+// declarations into actions by diffing against current system state.
+func (e *Engine) planScript(ctx context.Context, store *fact.Store, scriptContent []byte) ([]action.Action, error) {
+	// Pre-collect expensive facts concurrently
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(2)
+
+	g.Go(func() error {
+		_, err := fact.Get(gctx, store, "os", fact.OSCollector{})
+		return err
+	})
+	g.Go(func() error {
+		_, err := fact.Get(gctx, store, "homebrew", fact.HomebrewCollector{})
+		return err
+	})
+
+	if err := g.Wait(); err != nil {
+		return nil, fmt.Errorf("pre-collect facts: %w", err)
+	}
+
+	// Create and execute script runtime
+	rt := script.NewRuntime(ctx, e.logger, e.sourceDir, e.targetDir, store)
+	entryPath := filepath.Join(e.sourceDir, "crucible.js")
+	decls, err := rt.Execute(ctx, entryPath, scriptContent)
+	if err != nil {
+		return nil, err
+	}
+
+	// Resolve source files and templates
+	if err := rt.ResolveContent(ctx, store); err != nil {
+		return nil, err
+	}
+	decls = rt.Declarations()
+
+	// Convert declarations to actions by diffing against system state
+	return e.declarationsToActions(ctx, store, decls)
+}
+
+// declarationsToActions converts script declarations into actions by
+// diffing each declaration against current system state.
+func (e *Engine) declarationsToActions(ctx context.Context, store *fact.Store, decls []script.Declaration) ([]action.Action, error) {
+	var actions []action.Action
+	var packages []action.DesiredPackage
+
+	for _, decl := range decls {
+		switch decl.Type {
+		case script.DeclFile:
+			fileFact, err := fact.Get(ctx, store, "file:"+decl.Path, fact.FileCollector{Path: decl.Path})
+			if err != nil {
+				return nil, err
+			}
+			fileActions, err := action.DiffFile(action.DesiredFile{
+				Path:    decl.Path,
+				Content: decl.Content,
+				Mode:    decl.Mode,
+			}, fileFact)
+			if err != nil {
+				return nil, err
+			}
+			actions = append(actions, fileActions...)
+
+		case script.DeclDir:
+			dirFact, err := fact.Get(ctx, store, "dir:"+decl.Path, fact.DirCollector{Path: decl.Path})
+			if err != nil {
+				return nil, err
+			}
+			dirActions := action.DiffDir(action.DesiredDir{
+				Path: decl.Path,
+				Mode: decl.Mode,
+			}, dirFact)
+			actions = append(actions, dirActions...)
+
+		case script.DeclSymlink:
+			symlinkFact, err := fact.Get(ctx, store, "symlink:"+decl.Path, fact.SymlinkCollector{Path: decl.Path})
+			if err != nil {
+				return nil, err
+			}
+			symlinkActions := action.DiffSymlink(action.DesiredSymlink{
+				Path:   decl.Path,
+				Target: decl.LinkTarget,
+			}, symlinkFact)
+			actions = append(actions, symlinkActions...)
+
+		case script.DeclPackage:
+			packages = append(packages, action.DesiredPackage{
+				Name: decl.PackageName,
+				Type: decl.PackageType,
+			})
+		}
+	}
+
+	// Batch all package declarations into a single DiffHomebrew call
+	if len(packages) > 0 {
+		brewFact, err := fact.Get(ctx, store, "homebrew", fact.HomebrewCollector{})
+		if err != nil {
+			return nil, err
+		}
+		pkgActions, err := action.DiffHomebrew(packages, brewFact)
+		if err != nil {
+			return nil, err
+		}
+		actions = append(actions, pkgActions...)
 	}
 
 	return actions, nil
