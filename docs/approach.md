@@ -254,12 +254,12 @@ composition abstraction -- they are functions that return data.
 
 ### Source Directory
 
-The source directory is a normal directory tree. It lives wherever you put it -- likely a
-git repo in your home directory or a projects folder. The `crucible.js` entry point drives
-what gets managed. Source files referenced by scripts live alongside the script.
+The source directory is the current working directory when `crucible` is invoked. Run
+crucible from your dotfiles repo. The `crucible.js` entry point drives what gets managed.
+Source files referenced by scripts live alongside the script. The target is always `$HOME`.
 
 ```
-my-dotfiles/
+~/dotfiles/           ← run `crucible apply` from here
 ├── crucible.js               # Script declaring desired state
 ├── work-setup.js             # Optional sub-module for organization
 ├── fish/
@@ -270,7 +270,7 @@ my-dotfiles/
 ```
 
 If no `crucible.js` exists, the engine falls back to walk-based file sync -- mirroring the
-source directory into the target directory. This preserves backward compatibility.
+current directory into `$HOME`. This preserves backward compatibility.
 
 ### What Gets Applied
 
@@ -300,17 +300,17 @@ The apply process:
 ### CLI
 
 ```
-crucible plan              # Show what would change (dry run)
-crucible apply             # Apply changes
-crucible apply --dry-run   # Alias for plan
+crucible apply             # Apply configuration to the system
+crucible apply --dry-run   # Show what would change without making changes
 crucible diff              # Show unified diffs of file content changes
 crucible status            # Quick overview of drift and pending changes
 crucible verify            # Silent check, exit code 0 = clean, 1 = drift
 ```
 
-There is no `crucible edit`, `crucible add`, or `crucible cd`. You edit files in the source
-directory with your tools. You add files by putting them in the source directory. You manage
-git by being in the git repo.
+Run from your dotfiles directory. There is no `--source` or `--target` — source is always
+the current directory, target is always `$HOME`. There is no `crucible edit`, `crucible
+add`, or `crucible cd`. You edit files in the source directory with your tools. You add
+files by putting them in the source directory. You manage git by being in the git repo.
 
 ### Extensibility
 

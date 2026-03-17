@@ -1,10 +1,11 @@
 # Examples
 
-## firefox
+## packages
 
-Ensures Firefox is installed via Homebrew Cask.
+Installs `helios` (from the `ryanwersal/tools` tap) and `alacritty` via Homebrew.
 
 ```
-crucible plan --source examples
-crucible apply --source examples
+cd examples
+crucible apply --dry-run
+crucible apply
 ```

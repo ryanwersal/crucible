@@ -2,7 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"io"
 
+	"github.com/ryanwersal/crucible/internal/action"
 	"github.com/ryanwersal/crucible/internal/engine"
 	"github.com/spf13/cobra"
 )
@@ -12,37 +14,52 @@ func newApplyCmd(opts *rootOpts) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "apply",
-		Short: "Apply the planned actions",
+		Short: "Apply configuration to the system",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := newLogger(opts.verbose)
 			eng := engine.New(opts.source, opts.target, logger)
+			w := cmd.OutOrStdout()
 
 			if dryRun {
-				actions, err := eng.Plan(cmd.Context())
+				result, err := eng.Plan(cmd.Context())
 				if err != nil {
 					return err
 				}
-				w := cmd.OutOrStdout()
-				if len(actions) == 0 {
+				printResult(w, result)
+				fmt.Fprintln(w)
+				if len(result.Actions) == 0 {
 					fmt.Fprintln(w, "Everything up to date.")
-					return nil
+				} else {
+					fmt.Fprintf(w, "%d action(s) would be taken.\n", len(result.Actions))
 				}
-				for _, a := range actions {
-					fmt.Fprintf(w, "  %s: %s\n", a.Type, a.Description)
-				}
-				fmt.Fprintf(w, "\n%d action(s) would be taken (dry run).\n", len(actions))
 				return nil
 			}
 
-			if err := eng.Apply(cmd.Context()); err != nil {
+			result, err := eng.Apply(cmd.Context())
+			if err != nil {
 				return err
 			}
-
-			fmt.Fprintln(cmd.OutOrStdout(), "Apply complete.")
+			printResult(w, result)
+			fmt.Fprintln(w)
+			if len(result.Actions) == 0 {
+				fmt.Fprintln(w, "Everything up to date.")
+			} else {
+				fmt.Fprintf(w, "%d action(s) applied.\n", len(result.Actions))
+			}
 			return nil
 		},
 	}
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be done without making changes")
 	return cmd
+}
+
+// printResult writes observations and actions to w using ✓/→ symbols.
+func printResult(w io.Writer, result action.PlanResult) {
+	for _, o := range result.Observations {
+		fmt.Fprintf(w, "  ✓ %s\n", o.Description)
+	}
+	for _, a := range result.Actions {
+		fmt.Fprintf(w, "  → %s\n", a.Description)
+	}
 }

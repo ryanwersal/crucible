@@ -150,29 +150,18 @@ func (m *CrucibleModule) symlink(call goja.FunctionCall) goja.Value {
 // brew declares a Homebrew package.
 // Usage: c.brew("coreutils")
 //
-//	c.brew("firefox", { type: "cask" })
+//	c.brew("ryanwersal/tools/helios")
 func (m *CrucibleModule) brew(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		panic(m.vm.NewGoError(fmt.Errorf("brew() requires a package name argument")))
 	}
 
-	name := call.Arguments[0].String()
-	pkgType := "formula" // default
-
-	if len(call.Arguments) >= 2 {
-		opts := call.Arguments[1].ToObject(m.vm)
-		if v := opts.Get("type"); v != nil && !goja.IsUndefined(v) {
-			pkgType = v.String()
-		}
-	}
-
-	decl := decl.Declaration{
+	d := decl.Declaration{
 		Type:        decl.Package,
-		PackageName: name,
-		PackageType: pkgType,
+		PackageName: call.Arguments[0].String(),
 	}
 
-	*m.declarations = append(*m.declarations, decl)
+	*m.declarations = append(*m.declarations, d)
 	return goja.Undefined()
 }
 

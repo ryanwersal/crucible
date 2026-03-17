@@ -45,9 +45,9 @@ func (e *Engine) SetOutput(stdout, stderr io.Writer) {
 }
 
 // Plan walks the source directory, collects facts about corresponding target
-// paths, and returns the actions needed to reconcile them. If a crucible.js
-// entry point exists, script-driven planning is used instead.
-func (e *Engine) Plan(ctx context.Context) ([]action.Action, error) {
+// paths, and returns the full result of comparing desired vs actual state.
+// If a crucible.js entry point exists, script-driven planning is used instead.
+func (e *Engine) Plan(ctx context.Context) (action.PlanResult, error) {
 	store := fact.NewStore()
 
 	loader := script.NewLoader(e.sourceDir)
@@ -56,21 +56,21 @@ func (e *Engine) Plan(ctx context.Context) ([]action.Action, error) {
 		return e.planWalk(ctx, store)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("load script: %w", err)
+		return action.PlanResult{}, fmt.Errorf("load script: %w", err)
 	}
 	return e.planScript(ctx, store, content)
 }
 
 // planWalk is the original WalkDir-based planning logic.
-func (e *Engine) planWalk(ctx context.Context, store *fact.Store) ([]action.Action, error) {
-	var actions []action.Action
+func (e *Engine) planWalk(ctx context.Context, store *fact.Store) (action.PlanResult, error) {
+	var result action.PlanResult
 
 	err := filepath.WalkDir(e.sourceDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		// Skip dotfiles/dirs and crucible.yaml at the source root
+		// Skip dotfiles/dirs and crucible.yaml/crucible.js at the source root
 		name := d.Name()
 		if strings.HasPrefix(name, ".") {
 			if d.IsDir() {
@@ -97,11 +97,14 @@ func (e *Engine) planWalk(ctx context.Context, store *fact.Store) ([]action.Acti
 			if err != nil {
 				return err
 			}
-			dirActions := action.DiffDir(action.DesiredDir{
-				Path: targetPath,
-				Mode: info.Mode().Perm(),
-			}, dirFact)
-			actions = append(actions, dirActions...)
+			acts := action.DiffDir(action.DesiredDir{Path: targetPath, Mode: info.Mode().Perm()}, dirFact)
+			if len(acts) == 0 {
+				result.Observations = append(result.Observations, action.Observation{
+					Description: fmt.Sprintf("%s (up to date)", targetPath),
+				})
+			} else {
+				result.Actions = append(result.Actions, acts...)
+			}
 			return nil
 		}
 
@@ -115,11 +118,14 @@ func (e *Engine) planWalk(ctx context.Context, store *fact.Store) ([]action.Acti
 			if err != nil {
 				return err
 			}
-			symlinkActions := action.DiffSymlink(action.DesiredSymlink{
-				Path:   targetPath,
-				Target: linkTarget,
-			}, symlinkFact)
-			actions = append(actions, symlinkActions...)
+			acts := action.DiffSymlink(action.DesiredSymlink{Path: targetPath, Target: linkTarget}, symlinkFact)
+			if len(acts) == 0 {
+				result.Observations = append(result.Observations, action.Observation{
+					Description: fmt.Sprintf("%s (up to date)", targetPath),
+				})
+			} else {
+				result.Actions = append(result.Actions, acts...)
+			}
 			return nil
 		}
 
@@ -136,7 +142,7 @@ func (e *Engine) planWalk(ctx context.Context, store *fact.Store) ([]action.Acti
 		if err != nil {
 			return err
 		}
-		fileActions, err := action.DiffFile(action.DesiredFile{
+		acts, err := action.DiffFile(action.DesiredFile{
 			Path:    targetPath,
 			Content: content,
 			Mode:    info.Mode().Perm(),
@@ -144,19 +150,25 @@ func (e *Engine) planWalk(ctx context.Context, store *fact.Store) ([]action.Acti
 		if err != nil {
 			return err
 		}
-		actions = append(actions, fileActions...)
+		if len(acts) == 0 {
+			result.Observations = append(result.Observations, action.Observation{
+				Description: fmt.Sprintf("%s (up to date)", targetPath),
+			})
+		} else {
+			result.Actions = append(result.Actions, acts...)
+		}
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("walk source: %w", err)
+		return action.PlanResult{}, fmt.Errorf("walk source: %w", err)
 	}
 
-	return actions, nil
+	return result, nil
 }
 
 // planScript executes a crucible.js script and converts the resulting
-// declarations into actions by diffing against current system state.
-func (e *Engine) planScript(ctx context.Context, store *fact.Store, scriptContent []byte) ([]action.Action, error) {
+// declarations into a PlanResult by diffing against current system state.
+func (e *Engine) planScript(ctx context.Context, store *fact.Store, scriptContent []byte) (action.PlanResult, error) {
 	// Pre-collect expensive facts concurrently
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(2)
@@ -171,31 +183,29 @@ func (e *Engine) planScript(ctx context.Context, store *fact.Store, scriptConten
 	})
 
 	if err := g.Wait(); err != nil {
-		return nil, fmt.Errorf("pre-collect facts: %w", err)
+		return action.PlanResult{}, fmt.Errorf("pre-collect facts: %w", err)
 	}
 
 	// Create and execute script runtime
 	rt := script.NewRuntime(ctx, e.logger, e.sourceDir, e.targetDir, store)
 	entryPath := filepath.Join(e.sourceDir, "crucible.js")
-	decls, err := rt.Execute(ctx, entryPath, scriptContent)
+	_, err := rt.Execute(ctx, entryPath, scriptContent)
 	if err != nil {
-		return nil, err
+		return action.PlanResult{}, err
 	}
 
 	// Resolve source files and templates
 	if err := rt.ResolveContent(ctx, store); err != nil {
-		return nil, err
+		return action.PlanResult{}, err
 	}
-	decls = rt.Declarations()
 
-	// Convert declarations to actions by diffing against system state
-	return e.declarationsToActions(ctx, store, decls)
+	return e.declarationsToResult(ctx, store, rt.Declarations())
 }
 
-// declarationsToActions converts script declarations into actions by
+// declarationsToResult converts script declarations into a PlanResult by
 // diffing each declaration against current system state.
-func (e *Engine) declarationsToActions(ctx context.Context, store *fact.Store, decls []script.Declaration) ([]action.Action, error) {
-	var actions []action.Action
+func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, decls []script.Declaration) (action.PlanResult, error) {
+	var result action.PlanResult
 	var packages []action.DesiredPackage
 
 	for _, decl := range decls {
@@ -203,45 +213,54 @@ func (e *Engine) declarationsToActions(ctx context.Context, store *fact.Store, d
 		case script.DeclFile:
 			fileFact, err := fact.Get(ctx, store, "file:"+decl.Path, fact.FileCollector{Path: decl.Path})
 			if err != nil {
-				return nil, err
+				return action.PlanResult{}, err
 			}
-			fileActions, err := action.DiffFile(action.DesiredFile{
+			acts, err := action.DiffFile(action.DesiredFile{
 				Path:    decl.Path,
 				Content: decl.Content,
 				Mode:    decl.Mode,
 			}, fileFact)
 			if err != nil {
-				return nil, err
+				return action.PlanResult{}, err
 			}
-			actions = append(actions, fileActions...)
+			if len(acts) == 0 {
+				result.Observations = append(result.Observations, action.Observation{
+					Description: fmt.Sprintf("%s (up to date)", decl.Path),
+				})
+			} else {
+				result.Actions = append(result.Actions, acts...)
+			}
 
 		case script.DeclDir:
 			dirFact, err := fact.Get(ctx, store, "dir:"+decl.Path, fact.DirCollector{Path: decl.Path})
 			if err != nil {
-				return nil, err
+				return action.PlanResult{}, err
 			}
-			dirActions := action.DiffDir(action.DesiredDir{
-				Path: decl.Path,
-				Mode: decl.Mode,
-			}, dirFact)
-			actions = append(actions, dirActions...)
+			acts := action.DiffDir(action.DesiredDir{Path: decl.Path, Mode: decl.Mode}, dirFact)
+			if len(acts) == 0 {
+				result.Observations = append(result.Observations, action.Observation{
+					Description: fmt.Sprintf("%s (up to date)", decl.Path),
+				})
+			} else {
+				result.Actions = append(result.Actions, acts...)
+			}
 
 		case script.DeclSymlink:
 			symlinkFact, err := fact.Get(ctx, store, "symlink:"+decl.Path, fact.SymlinkCollector{Path: decl.Path})
 			if err != nil {
-				return nil, err
+				return action.PlanResult{}, err
 			}
-			symlinkActions := action.DiffSymlink(action.DesiredSymlink{
-				Path:   decl.Path,
-				Target: decl.LinkTarget,
-			}, symlinkFact)
-			actions = append(actions, symlinkActions...)
+			acts := action.DiffSymlink(action.DesiredSymlink{Path: decl.Path, Target: decl.LinkTarget}, symlinkFact)
+			if len(acts) == 0 {
+				result.Observations = append(result.Observations, action.Observation{
+					Description: fmt.Sprintf("%s (up to date)", decl.Path),
+				})
+			} else {
+				result.Actions = append(result.Actions, acts...)
+			}
 
 		case script.DeclPackage:
-			packages = append(packages, action.DesiredPackage{
-				Name: decl.PackageName,
-				Type: decl.PackageType,
-			})
+			packages = append(packages, action.DesiredPackage{Name: decl.PackageName})
 		}
 	}
 
@@ -249,31 +268,47 @@ func (e *Engine) declarationsToActions(ctx context.Context, store *fact.Store, d
 	if len(packages) > 0 {
 		brewFact, err := fact.Get(ctx, store, "homebrew", fact.HomebrewCollector{})
 		if err != nil {
-			return nil, err
+			return action.PlanResult{}, err
 		}
 		pkgActions, err := action.DiffHomebrew(packages, brewFact)
 		if err != nil {
-			return nil, err
+			return action.PlanResult{}, err
 		}
-		actions = append(actions, pkgActions...)
+
+		// Separate installed packages (observations) from those needing install (actions)
+		needsInstall := make(map[string]bool, len(pkgActions))
+		for _, a := range pkgActions {
+			needsInstall[a.PackageName] = true
+		}
+		for _, pkg := range packages {
+			if needsInstall[pkg.Name] {
+				// action already in pkgActions
+			} else {
+				result.Observations = append(result.Observations, action.Observation{
+					Description: fmt.Sprintf("%s (installed)", pkg.Name),
+				})
+			}
+		}
+		result.Actions = append(result.Actions, pkgActions...)
 	}
 
-	return actions, nil
+	return result, nil
 }
 
-// Apply runs Plan and then executes all resulting actions.
-func (e *Engine) Apply(ctx context.Context) error {
-	actions, err := e.Plan(ctx)
+// Apply runs Plan and then executes all resulting actions, returning the full
+// PlanResult so callers can report what was already current and what was applied.
+func (e *Engine) Apply(ctx context.Context) (action.PlanResult, error) {
+	result, err := e.Plan(ctx)
 	if err != nil {
-		return err
+		return action.PlanResult{}, err
 	}
 
-	for i, a := range actions {
+	for i, a := range result.Actions {
 		e.logger.Info("executing", "action", a.Type.String(), "description", a.Description)
 		if err := action.Execute(ctx, a, e.stdout, e.stderr); err != nil {
-			return fmt.Errorf("action %d/%d failed (%s): %w", i+1, len(actions), a.Description, err)
+			return action.PlanResult{}, fmt.Errorf("action %d/%d failed (%s): %w", i+1, len(result.Actions), a.Description, err)
 		}
 	}
 
-	return nil
+	return result, nil
 }

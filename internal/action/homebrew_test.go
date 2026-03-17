@@ -18,13 +18,13 @@ func TestDiffHomebrew(t *testing.T) {
 	}{
 		{
 			name:    "brew not available",
-			desired: []DesiredPackage{{Name: "git", Type: "formula"}},
+			desired: []DesiredPackage{{Name: "git"}},
 			actual:  &fact.HomebrewInfo{Available: false},
 			wantErr: true,
 		},
 		{
-			name:    "already installed",
-			desired: []DesiredPackage{{Name: "git", Type: "formula"}},
+			name:    "formula already installed",
+			desired: []DesiredPackage{{Name: "git"}},
 			actual: &fact.HomebrewInfo{
 				Available: true,
 				Formulae:  map[string]bool{"git": true},
@@ -33,10 +33,20 @@ func TestDiffHomebrew(t *testing.T) {
 			wantActions: 0,
 		},
 		{
+			name:    "cask already installed",
+			desired: []DesiredPackage{{Name: "alacritty"}},
+			actual: &fact.HomebrewInfo{
+				Available: true,
+				Formulae:  map[string]bool{},
+				Casks:     map[string]bool{"alacritty": true},
+			},
+			wantActions: 0,
+		},
+		{
 			name: "needs install",
 			desired: []DesiredPackage{
-				{Name: "git", Type: "formula"},
-				{Name: "firefox", Type: "cask"},
+				{Name: "git"},
+				{Name: "alacritty"},
 			},
 			actual: &fact.HomebrewInfo{
 				Available: true,
@@ -46,14 +56,24 @@ func TestDiffHomebrew(t *testing.T) {
 			wantActions: 1,
 		},
 		{
-			name:    "invalid package type",
-			desired: []DesiredPackage{{Name: "foo", Type: "invalid"}},
+			name:    "tap-qualified name matches short name",
+			desired: []DesiredPackage{{Name: "ryanwersal/tools/helios"}},
+			actual: &fact.HomebrewInfo{
+				Available: true,
+				Formulae:  map[string]bool{"helios": true},
+				Casks:     map[string]bool{},
+			},
+			wantActions: 0,
+		},
+		{
+			name:    "tap-qualified name not installed",
+			desired: []DesiredPackage{{Name: "ryanwersal/tools/helios"}},
 			actual: &fact.HomebrewInfo{
 				Available: true,
 				Formulae:  map[string]bool{},
 				Casks:     map[string]bool{},
 			},
-			wantErr: true,
+			wantActions: 1,
 		},
 	}
 
@@ -74,5 +94,24 @@ func TestDiffHomebrew(t *testing.T) {
 				t.Fatalf("expected %d actions, got %d", tt.wantActions, len(actions))
 			}
 		})
+	}
+}
+
+func TestShortName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"git", "git"},
+		{"ryanwersal/tools/helios", "helios"},
+		{"owner/tap/formula", "formula"},
+	}
+
+	for _, tt := range tests {
+		if got := shortName(tt.input); got != tt.want {
+			t.Errorf("shortName(%q) = %q, want %q", tt.input, got, tt.want)
+		}
 	}
 }

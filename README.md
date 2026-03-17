@@ -26,14 +26,15 @@ c.symlink("~/.vimrc", { target: "~/.config/nvim/init.vim" });
 c.dir("~/.config/fish", { mode: 0o755 });
 ```
 
-Then:
+Then run from your dotfiles directory:
 
 ```
-crucible plan    # show what would change
-crucible apply   # apply changes
+crucible apply --dry-run   # show what would change
+crucible apply             # apply changes
 ```
 
-No script? The source directory is mirrored into the target as-is (backward compatible).
+Source is always the current directory. Target is always `$HOME`. No script? The current
+directory is mirrored into `$HOME` as-is (backward compatible).
 
 ## Install
 

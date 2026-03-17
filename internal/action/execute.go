@@ -62,13 +62,7 @@ func executeWriteFile(a Action) error {
 }
 
 func executeInstallPackage(ctx context.Context, a Action, stdout, stderr io.Writer) error {
-	args := []string{"install"}
-	if a.PackageType == "cask" {
-		args = append(args, "--cask")
-	}
-	args = append(args, a.PackageName)
-
-	cmd := exec.CommandContext(ctx, "brew", args...)
+	cmd := exec.CommandContext(ctx, "brew", "install", a.PackageName)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	return cmd.Run()

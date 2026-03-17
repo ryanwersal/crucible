@@ -185,23 +185,20 @@ func TestBrew_Formula(t *testing.T) {
 	if d.PackageName != "coreutils" {
 		t.Errorf("name = %q", d.PackageName)
 	}
-	if d.PackageType != "formula" {
-		t.Errorf("type = %q, want formula", d.PackageType)
-	}
 }
 
-func TestBrew_Cask(t *testing.T) {
+func TestBrew_TapQualified(t *testing.T) {
 	t.Parallel()
 	vm, decls := setupModule(t)
 
-	_, err := vm.RunString(`c.brew("firefox", { type: "cask" })`)
+	_, err := vm.RunString(`c.brew("ryanwersal/tools/helios")`)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	d := (*decls)[0]
-	if d.PackageType != "cask" {
-		t.Errorf("type = %q, want cask", d.PackageType)
+	if d.PackageName != "ryanwersal/tools/helios" {
+		t.Errorf("name = %q", d.PackageName)
 	}
 }
 

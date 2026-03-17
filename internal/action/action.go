@@ -42,5 +42,4 @@ type Action struct {
 	Mode        fs.FileMode // WriteFile, CreateDir, SetPermissions
 	LinkTarget  string      // CreateSymlink
 	PackageName string      // InstallPackage
-	PackageType string      // "formula" or "cask"
 }

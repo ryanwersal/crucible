@@ -18,18 +18,18 @@ func TestPlan_NewFiles(t *testing.T) {
 	os.WriteFile(filepath.Join(src, "subdir", "nested.txt"), []byte("nested"), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	actions, err := eng.Plan(context.Background())
+	result, err := eng.Plan(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(actions) == 0 {
+	if len(result.Actions) == 0 {
 		t.Fatal("expected actions for new files")
 	}
 
 	hasWrite := false
 	hasDir := false
-	for _, a := range actions {
+	for _, a := range result.Actions {
 		switch a.Type.String() {
 		case "WriteFile":
 			hasWrite = true
@@ -50,21 +50,23 @@ func TestPlan_Idempotent(t *testing.T) {
 	src := t.TempDir()
 	tgt := t.TempDir()
 
-	content := []byte("hello")
-	os.WriteFile(filepath.Join(src, "test.txt"), content, 0o644)
+	os.WriteFile(filepath.Join(src, "test.txt"), []byte("hello"), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-
-	if err := eng.Apply(context.Background()); err != nil {
+	if _, err := eng.Apply(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
-	actions, err := eng.Plan(context.Background())
+	result, err := eng.Plan(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(actions) != 0 {
-		t.Fatalf("expected 0 actions on second plan, got %d: %v", len(actions), actions)
+	if len(result.Actions) != 0 {
+		t.Fatalf("expected 0 actions on second plan, got %d: %v", len(result.Actions), result.Actions)
+	}
+	// 2 observations: the target dir itself + the file
+	if len(result.Observations) != 2 {
+		t.Fatalf("expected 2 observations on second plan, got %d", len(result.Observations))
 	}
 }
 
@@ -78,13 +80,13 @@ func TestPlan_SkipsDotfiles(t *testing.T) {
 	os.WriteFile(filepath.Join(src, ".git", "config"), []byte("git"), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	actions, err := eng.Plan(context.Background())
+	result, err := eng.Plan(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(actions) != 0 {
-		t.Fatalf("expected 0 actions (dotfiles skipped), got %d", len(actions))
+	if len(result.Actions) != 0 {
+		t.Fatalf("expected 0 actions (dotfiles skipped), got %d", len(result.Actions))
 	}
 }
 
@@ -97,12 +99,12 @@ func TestPlan_SkipsCrucibleYaml(t *testing.T) {
 	os.WriteFile(filepath.Join(src, "real.txt"), []byte("real"), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	actions, err := eng.Plan(context.Background())
+	result, err := eng.Plan(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for _, a := range actions {
+	for _, a := range result.Actions {
 		if filepath.Base(a.Path) == "crucible.yaml" {
 			t.Fatal("crucible.yaml should be skipped")
 		}
@@ -117,17 +119,19 @@ func TestPlan_DetectsContentChange(t *testing.T) {
 	os.WriteFile(filepath.Join(src, "test.txt"), []byte("v1"), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	eng.Apply(context.Background())
+	if _, err := eng.Apply(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 
 	os.WriteFile(filepath.Join(src, "test.txt"), []byte("v2"), 0o644)
 
-	actions, err := eng.Plan(context.Background())
+	result, err := eng.Plan(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	hasWrite := false
-	for _, a := range actions {
+	for _, a := range result.Actions {
 		if a.Type.String() == "WriteFile" {
 			hasWrite = true
 		}
@@ -145,7 +149,7 @@ func TestApply_CreatesFiles(t *testing.T) {
 	os.WriteFile(filepath.Join(src, "test.txt"), []byte("hello"), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	if err := eng.Apply(context.Background()); err != nil {
+	if _, err := eng.Apply(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -168,16 +172,16 @@ func TestPlan_BackwardCompat(t *testing.T) {
 	os.WriteFile(filepath.Join(src, "config.txt"), []byte("value"), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	actions, err := eng.Plan(context.Background())
+	result, err := eng.Plan(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(actions) != 1 {
-		t.Fatalf("expected 1 action, got %d", len(actions))
+	if len(result.Actions) != 1 {
+		t.Fatalf("expected 1 action, got %d", len(result.Actions))
 	}
-	if actions[0].Type.String() != "WriteFile" {
-		t.Errorf("expected WriteFile, got %s", actions[0].Type.String())
+	if result.Actions[0].Type.String() != "WriteFile" {
+		t.Errorf("expected WriteFile, got %s", result.Actions[0].Type.String())
 	}
 }
 
@@ -195,14 +199,14 @@ func TestPlan_Script(t *testing.T) {
 	os.WriteFile(filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	actions, err := eng.Plan(context.Background())
+	result, err := eng.Plan(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	hasWrite := false
 	hasDir := false
-	for _, a := range actions {
+	for _, a := range result.Actions {
 		switch a.Type.String() {
 		case "WriteFile":
 			hasWrite = true
@@ -231,7 +235,7 @@ func TestApply_Script(t *testing.T) {
 	os.WriteFile(filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	if err := eng.Apply(context.Background()); err != nil {
+	if _, err := eng.Apply(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -260,7 +264,7 @@ func TestPlan_Script_SourceFile(t *testing.T) {
 	os.WriteFile(filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	if err := eng.Apply(context.Background()); err != nil {
+	if _, err := eng.Apply(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -273,7 +277,8 @@ func TestPlan_Script_SourceFile(t *testing.T) {
 	}
 }
 
-// TestPlan_Script_Idempotent verifies that a second plan produces no actions.
+// TestPlan_Script_Idempotent verifies that a second plan produces no actions
+// and produces observations for each managed item.
 func TestPlan_Script_Idempotent(t *testing.T) {
 	t.Parallel()
 	src := t.TempDir()
@@ -286,15 +291,18 @@ func TestPlan_Script_Idempotent(t *testing.T) {
 	os.WriteFile(filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	if err := eng.Apply(context.Background()); err != nil {
+	if _, err := eng.Apply(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
-	actions, err := eng.Plan(context.Background())
+	result, err := eng.Plan(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(actions) != 0 {
-		t.Fatalf("expected 0 actions on second plan, got %d", len(actions))
+	if len(result.Actions) != 0 {
+		t.Fatalf("expected 0 actions on second plan, got %d", len(result.Actions))
+	}
+	if len(result.Observations) != 1 {
+		t.Fatalf("expected 1 observation on second plan, got %d", len(result.Observations))
 	}
 }

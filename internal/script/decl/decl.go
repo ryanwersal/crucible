@@ -38,5 +38,4 @@ type Declaration struct {
 	Mode         fs.FileMode    // File, Dir
 	LinkTarget   string         // Symlink
 	PackageName  string         // Package
-	PackageType  string         // "formula" or "cask"
 }

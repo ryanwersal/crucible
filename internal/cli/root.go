@@ -7,29 +7,38 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// rootOpts holds persistent flags for the root command.
+// rootOpts holds persistent flags and injected defaults for the root command.
 type rootOpts struct {
-	source  string
-	target  string
 	verbose bool
+
+	// source and target are the engine directories. They default to "." and
+	// $HOME respectively. Tests set them directly to avoid touching the real
+	// home directory.
+	source string
+	target string
 }
 
-// NewRootCmd creates the root crucible command.
+// NewRootCmd creates the root crucible command with production defaults.
 func NewRootCmd() *cobra.Command {
-	opts := &rootOpts{}
+	opts := &rootOpts{
+		source: ".",
+		target: homeDir(),
+	}
+	return buildRootCmd(opts)
+}
 
+// buildRootCmd constructs the command tree from the given opts.
+// Separated from NewRootCmd so tests can inject source/target.
+func buildRootCmd(opts *rootOpts) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "crucible",
 		Short:        "A declarative dotfile and system configuration manager",
-		Long:         "Crucible manages your dotfiles and system configuration using a two-phase plan/apply pipeline.",
+		Long:         "Crucible manages your dotfiles and system configuration declaratively. Use --dry-run to preview changes.",
 		SilenceUsage: true,
 	}
 
-	cmd.PersistentFlags().StringVar(&opts.source, "source", ".", "source directory containing desired state")
-	cmd.PersistentFlags().StringVar(&opts.target, "target", homeDir(), "target directory to apply state to")
 	cmd.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", false, "enable debug logging")
 
-	cmd.AddCommand(newPlanCmd(opts))
 	cmd.AddCommand(newApplyCmd(opts))
 
 	return cmd
