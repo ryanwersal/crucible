@@ -2,8 +2,8 @@
 go = "1.26.1"
 
 [tasks.build]
-description = "Build all packages"
-run = "go build ./..."
+description = "Build crucible binary to bin/crucible"
+run = "go build -o bin/crucible ./cmd/crucible"
 
 [tasks.test]
 description = "Run all tests"
