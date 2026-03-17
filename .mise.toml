@@ -1,0 +1,30 @@
+[tools]
+go = "1.26.1"
+
+[tasks.build]
+description = "Build all packages"
+run = "go build ./..."
+
+[tasks.test]
+description = "Run all tests"
+run = "go test ./..."
+
+[tasks.fmt]
+description = "Format all Go source files"
+run = "gofmt -w ."
+
+[tasks.fmt-check]
+description = "Check formatting (fails if unformatted)"
+run = "test -z \"$(gofmt -l .)\""
+
+[tasks.vet]
+description = "Run go vet on all packages"
+run = "go vet ./..."
+
+[tasks.lint]
+description = "Run fmt-check and vet"
+depends = ["fmt-check", "vet"]
+
+[tasks.check]
+description = "Run all checks (lint + test)"
+depends = ["lint", "test"]

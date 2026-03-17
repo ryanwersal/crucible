@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(go:*)",
+      "Bash(gofmt:*)",
+      "Bash(goimports:*)",
+      "Bash(golangci-lint:*)",
+      "Bash(gopls:*)",
+      "Bash(staticcheck:*)",
+      "Bash(dlv:*)",
+      "Bash(govulncheck:*)",
+      "Bash(gotests:*)",
+      "Bash(gomodifytags:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.pyinfra.com)",
+      "WebFetch(domain:chezmoi.io)",
+      "WebFetch(domain:www.chezmoi.io)"
+    ]
+  }
+}
