@@ -24,6 +24,9 @@ func Execute(ctx context.Context, a Action, stdout, stderr io.Writer) error {
 	case SetPermissions:
 		return os.Chmod(a.Path, a.Mode)
 	case DeletePath:
+		if a.Recursive {
+			return os.RemoveAll(a.Path)
+		}
 		return os.Remove(a.Path)
 	case InstallPackage:
 		return executeInstallPackage(ctx, a, stdout, stderr)
@@ -41,6 +44,12 @@ func Execute(ctx context.Context, a Action, stdout, stderr io.Writer) error {
 		return executeInstallMiseTool(ctx, a, stdout, stderr)
 	case SetShell:
 		return executeSetShell(ctx, a)
+	case UninstallPackage:
+		return executeUninstallPackage(ctx, a, stdout, stderr)
+	case UninstallMiseTool:
+		return executeUninstallMiseTool(ctx, a, stdout, stderr)
+	case DeleteDefaults:
+		return executeDeleteDefaults(ctx, a)
 	default:
 		return fmt.Errorf("unknown action type: %v", a.Type)
 	}
@@ -189,5 +198,24 @@ func executeSetShell(ctx context.Context, a Action) error {
 	}
 
 	cmd := exec.CommandContext(ctx, "chsh", args...)
+	return cmd.Run()
+}
+
+func executeUninstallPackage(ctx context.Context, a Action, stdout, stderr io.Writer) error {
+	cmd := exec.CommandContext(ctx, "brew", "uninstall", a.PackageName)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	return cmd.Run()
+}
+
+func executeUninstallMiseTool(ctx context.Context, a Action, stdout, stderr io.Writer) error {
+	cmd := exec.CommandContext(ctx, "mise", "uninstall", a.MiseToolName)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	return cmd.Run()
+}
+
+func executeDeleteDefaults(ctx context.Context, a Action) error {
+	cmd := exec.CommandContext(ctx, "defaults", "delete", a.DefaultsDomain, a.DefaultsKey)
 	return cmd.Run()
 }

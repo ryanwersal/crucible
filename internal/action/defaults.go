@@ -6,15 +6,28 @@ import (
 	"github.com/ryanwersal/crucible/internal/fact"
 )
 
-// DesiredDefault describes a macOS defaults key that should be set.
+// DesiredDefault describes a macOS defaults key that should be set (or deleted).
 type DesiredDefault struct {
 	Domain string
 	Key    string
-	Value  any // bool, int64, float64, or string
+	Value  any  // bool, int64, float64, or string
+	Absent bool // true = ensure the key does not exist
 }
 
 // DiffDefaults compares the desired default value against the current state.
 func DiffDefaults(desired DesiredDefault, actual *fact.DefaultsInfo) []Action {
+	if desired.Absent {
+		if actual != nil && actual.Exists {
+			return []Action{{
+				Type:           DeleteDefaults,
+				DefaultsDomain: desired.Domain,
+				DefaultsKey:    desired.Key,
+				Description:    fmt.Sprintf("defaults delete %s %s", desired.Domain, desired.Key),
+			}}
+		}
+		return nil
+	}
+
 	valueType := defaultsValueType(desired.Value)
 
 	if actual != nil && actual.Exists && valuesEqual(desired.Value, actual.Value) {

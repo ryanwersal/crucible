@@ -19,6 +19,9 @@ const (
 	InstallFont
 	InstallMiseTool
 	SetShell
+	UninstallPackage
+	UninstallMiseTool
+	DeleteDefaults
 )
 
 func (t Type) String() string {
@@ -49,6 +52,12 @@ func (t Type) String() string {
 		return "InstallMiseTool"
 	case SetShell:
 		return "SetShell"
+	case UninstallPackage:
+		return "UninstallPackage"
+	case UninstallMiseTool:
+		return "UninstallMiseTool"
+	case DeleteDefaults:
+		return "DeleteDefaults"
 	default:
 		return "Unknown"
 	}
@@ -59,6 +68,7 @@ type Action struct {
 	Type        Type
 	Path        string
 	Description string
+	Recursive   bool        // DeletePath: use os.RemoveAll instead of os.Remove
 	Content     []byte      // WriteFile
 	Mode        fs.FileMode // WriteFile, CreateDir, SetPermissions
 	LinkTarget  string      // CreateSymlink

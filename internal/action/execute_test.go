@@ -133,3 +133,28 @@ func TestExecute_DeletePath(t *testing.T) {
 		t.Fatal("expected file to be deleted")
 	}
 }
+
+func TestExecute_DeletePathRecursive(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mydir")
+	if err := os.MkdirAll(filepath.Join(path, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "sub", "file.txt"), []byte("test"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := Execute(context.Background(), Action{
+		Type:      DeletePath,
+		Path:      path,
+		Recursive: true,
+	}, io.Discard, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal("expected directory to be deleted")
+	}
+}

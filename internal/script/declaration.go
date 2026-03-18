@@ -8,9 +8,10 @@ import "github.com/ryanwersal/crucible/internal/script/decl"
 
 // Re-export declaration types for external consumers.
 type (
-	Declaration     = decl.Declaration
-	DeclarationType = decl.Type
-	DockFolder      = decl.DockFolder
+	Declaration      = decl.Declaration
+	DeclarationType  = decl.Type
+	DeclarationState = decl.State
+	DockFolder       = decl.DockFolder
 )
 
 const (
@@ -24,4 +25,7 @@ const (
 	DeclFont     = decl.Font
 	DeclMiseTool = decl.MiseTool
 	DeclShell    = decl.Shell
+
+	DeclPresent = decl.Present
+	DeclAbsent  = decl.Absent
 )

@@ -58,6 +58,24 @@ func TestDiffMise(t *testing.T) {
 			},
 			wantActions: 1,
 		},
+		{
+			name:    "absent and installed",
+			desired: []DesiredMiseTool{{Name: "python", Absent: true}},
+			actual: &fact.MiseInfo{
+				Available: true,
+				Globals:   map[string]bool{"python": true},
+			},
+			wantActions: 1,
+		},
+		{
+			name:    "absent and not installed",
+			desired: []DesiredMiseTool{{Name: "python", Absent: true}},
+			actual: &fact.MiseInfo{
+				Available: true,
+				Globals:   map[string]bool{},
+			},
+			wantActions: 0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -77,8 +95,8 @@ func TestDiffMise(t *testing.T) {
 				t.Fatalf("expected %d actions, got %d", tt.wantActions, len(actions))
 			}
 			for _, a := range actions {
-				if a.Type != InstallMiseTool {
-					t.Errorf("expected InstallMiseTool, got %s", a.Type)
+				if a.Type != InstallMiseTool && a.Type != UninstallMiseTool {
+					t.Errorf("expected InstallMiseTool or UninstallMiseTool, got %s", a.Type)
 				}
 			}
 		})

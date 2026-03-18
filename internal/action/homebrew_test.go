@@ -75,6 +75,26 @@ func TestDiffHomebrew(t *testing.T) {
 			},
 			wantActions: 1,
 		},
+		{
+			name:    "absent and installed",
+			desired: []DesiredPackage{{Name: "wget", Absent: true}},
+			actual: &fact.HomebrewInfo{
+				Available: true,
+				Formulae:  map[string]bool{"wget": true},
+				Casks:     map[string]bool{},
+			},
+			wantActions: 1,
+		},
+		{
+			name:    "absent and not installed",
+			desired: []DesiredPackage{{Name: "wget", Absent: true}},
+			actual: &fact.HomebrewInfo{
+				Available: true,
+				Formulae:  map[string]bool{},
+				Casks:     map[string]bool{},
+			},
+			wantActions: 0,
+		},
 	}
 
 	for _, tt := range tests {

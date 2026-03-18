@@ -69,6 +69,18 @@ func TestDiffDefaults(t *testing.T) {
 			actual:      &fact.DefaultsInfo{Exists: true, Value: "icnv"},
 			wantActions: 1,
 		},
+		{
+			name:        "absent and key exists",
+			desired:     DesiredDefault{Domain: "com.apple.dock", Key: "autohide", Absent: true},
+			actual:      &fact.DefaultsInfo{Exists: true, Value: true},
+			wantActions: 1,
+		},
+		{
+			name:        "absent and key does not exist",
+			desired:     DesiredDefault{Domain: "com.apple.dock", Key: "autohide", Absent: true},
+			actual:      &fact.DefaultsInfo{Exists: false},
+			wantActions: 0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -78,8 +90,8 @@ func TestDiffDefaults(t *testing.T) {
 			if len(actions) != tt.wantActions {
 				t.Fatalf("expected %d actions, got %d: %v", tt.wantActions, len(actions), actions)
 			}
-			if tt.wantActions > 0 && actions[0].Type != SetDefaults {
-				t.Fatalf("expected SetDefaults, got %s", actions[0].Type)
+			if tt.wantActions > 0 && actions[0].Type != SetDefaults && actions[0].Type != DeleteDefaults {
+				t.Fatalf("expected SetDefaults or DeleteDefaults, got %s", actions[0].Type)
 			}
 		})
 	}

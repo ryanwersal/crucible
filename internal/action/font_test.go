@@ -54,6 +54,22 @@ func TestDiffFonts(t *testing.T) {
 			actual:      &fact.FontInfo{Installed: map[string]bool{"Mono.ttf": true}},
 			wantActions: 0,
 		},
+		{
+			name: "absent and installed",
+			desired: []DesiredFont{
+				{Name: "Mono.ttf", DestDir: "/home/user/Library/Fonts", Absent: true},
+			},
+			actual:      &fact.FontInfo{Installed: map[string]bool{"Mono.ttf": true}},
+			wantActions: 1,
+		},
+		{
+			name: "absent and not installed",
+			desired: []DesiredFont{
+				{Name: "Mono.ttf", DestDir: "/home/user/Library/Fonts", Absent: true},
+			},
+			actual:      &fact.FontInfo{Installed: map[string]bool{}},
+			wantActions: 0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -64,8 +80,8 @@ func TestDiffFonts(t *testing.T) {
 				t.Fatalf("expected %d actions, got %d: %v", tt.wantActions, len(actions), actions)
 			}
 			for _, a := range actions {
-				if a.Type != InstallFont {
-					t.Errorf("expected InstallFont, got %s", a.Type)
+				if a.Type != InstallFont && a.Type != DeletePath {
+					t.Errorf("expected InstallFont or DeletePath, got %s", a.Type)
 				}
 			}
 		})

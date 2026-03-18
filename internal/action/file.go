@@ -14,11 +14,23 @@ type DesiredFile struct {
 	Path    string
 	Content []byte
 	Mode    fs.FileMode
+	Absent  bool // true = ensure the file does not exist
 }
 
 // DiffFile compares the desired file state against the actual state and returns
 // the actions needed to reconcile them.
 func DiffFile(desired DesiredFile, actual *fact.FileInfo) ([]Action, error) {
+	if desired.Absent {
+		if actual != nil && actual.Exists && !actual.IsDir {
+			return []Action{{
+				Type:        DeletePath,
+				Path:        desired.Path,
+				Description: fmt.Sprintf("remove file %s", desired.Path),
+			}}, nil
+		}
+		return nil, nil
+	}
+
 	desiredHash := sha256Hex(desired.Content)
 
 	if actual == nil || !actual.Exists {

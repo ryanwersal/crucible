@@ -7,9 +7,10 @@ import (
 	"github.com/ryanwersal/crucible/internal/fact"
 )
 
-// DesiredPackage describes a Homebrew package that should be installed.
+// DesiredPackage describes a Homebrew package that should be installed (or removed).
 type DesiredPackage struct {
-	Name string // may be a tap-qualified name like "owner/tap/formula"
+	Name   string // may be a tap-qualified name like "owner/tap/formula"
+	Absent bool   // true = ensure the package is not installed
 }
 
 // DiffHomebrew compares desired packages against installed state.
@@ -20,7 +21,18 @@ func DiffHomebrew(desired []DesiredPackage, actual *fact.HomebrewInfo) ([]Action
 
 	var actions []Action
 	for _, pkg := range desired {
-		if !isInstalled(pkg.Name, actual) {
+		installed := isInstalled(pkg.Name, actual)
+		if pkg.Absent {
+			if installed {
+				actions = append(actions, Action{
+					Type:        UninstallPackage,
+					PackageName: pkg.Name,
+					Description: fmt.Sprintf("brew uninstall %s", pkg.Name),
+				})
+			}
+			continue
+		}
+		if !installed {
 			actions = append(actions, Action{
 				Type:        InstallPackage,
 				PackageName: pkg.Name,

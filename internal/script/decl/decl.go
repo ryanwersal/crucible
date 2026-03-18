@@ -2,6 +2,14 @@ package decl
 
 import "io/fs"
 
+// State indicates whether a declaration should be present or absent.
+type State int
+
+const (
+	Present State = iota // zero value = backward compatible
+	Absent
+)
+
 // Type identifies what a script declaration manages.
 type Type int
 
@@ -48,6 +56,7 @@ func (d Type) String() string {
 // Declaration represents a single desired-state entry produced by a script.
 type Declaration struct {
 	Type         Type
+	State        State
 	Path         string         // target path (~ expanded)
 	Content      []byte         // File: inline content
 	SourceFile   string         // File: relative path in source dir

@@ -36,6 +36,19 @@ func TestDiffSymlink(t *testing.T) {
 			wantActions: 2,
 			wantType:    DeletePath,
 		},
+		{
+			name:        "absent and exists",
+			desired:     DesiredSymlink{Path: "/tmp/link", Absent: true},
+			actual:      &fact.SymlinkInfo{Exists: true, Target: "/tmp/target"},
+			wantActions: 1,
+			wantType:    DeletePath,
+		},
+		{
+			name:        "absent and does not exist",
+			desired:     DesiredSymlink{Path: "/tmp/link", Absent: true},
+			actual:      nil,
+			wantActions: 0,
+		},
 	}
 
 	for _, tt := range tests {

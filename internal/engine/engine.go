@@ -221,14 +221,21 @@ func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, de
 				Path:    decl.Path,
 				Content: decl.Content,
 				Mode:    decl.Mode,
+				Absent:  decl.State == script.DeclAbsent,
 			}, fileFact)
 			if err != nil {
 				return action.PlanResult{}, err
 			}
 			if len(acts) == 0 {
-				result.Observations = append(result.Observations, action.Observation{
-					Description: fmt.Sprintf("%s (up to date)", decl.Path),
-				})
+				if decl.State == script.DeclAbsent {
+					result.Observations = append(result.Observations, action.Observation{
+						Description: fmt.Sprintf("%s (already absent)", decl.Path),
+					})
+				} else {
+					result.Observations = append(result.Observations, action.Observation{
+						Description: fmt.Sprintf("%s (up to date)", decl.Path),
+					})
+				}
 			} else {
 				result.Actions = append(result.Actions, acts...)
 			}
@@ -238,11 +245,21 @@ func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, de
 			if err != nil {
 				return action.PlanResult{}, err
 			}
-			acts := action.DiffDir(action.DesiredDir{Path: decl.Path, Mode: decl.Mode}, dirFact)
+			acts := action.DiffDir(action.DesiredDir{
+				Path:   decl.Path,
+				Mode:   decl.Mode,
+				Absent: decl.State == script.DeclAbsent,
+			}, dirFact)
 			if len(acts) == 0 {
-				result.Observations = append(result.Observations, action.Observation{
-					Description: fmt.Sprintf("%s (up to date)", decl.Path),
-				})
+				if decl.State == script.DeclAbsent {
+					result.Observations = append(result.Observations, action.Observation{
+						Description: fmt.Sprintf("%s (already absent)", decl.Path),
+					})
+				} else {
+					result.Observations = append(result.Observations, action.Observation{
+						Description: fmt.Sprintf("%s (up to date)", decl.Path),
+					})
+				}
 			} else {
 				result.Actions = append(result.Actions, acts...)
 			}
@@ -252,17 +269,30 @@ func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, de
 			if err != nil {
 				return action.PlanResult{}, err
 			}
-			acts := action.DiffSymlink(action.DesiredSymlink{Path: decl.Path, Target: decl.LinkTarget}, symlinkFact)
+			acts := action.DiffSymlink(action.DesiredSymlink{
+				Path:   decl.Path,
+				Target: decl.LinkTarget,
+				Absent: decl.State == script.DeclAbsent,
+			}, symlinkFact)
 			if len(acts) == 0 {
-				result.Observations = append(result.Observations, action.Observation{
-					Description: fmt.Sprintf("%s (up to date)", decl.Path),
-				})
+				if decl.State == script.DeclAbsent {
+					result.Observations = append(result.Observations, action.Observation{
+						Description: fmt.Sprintf("%s (already absent)", decl.Path),
+					})
+				} else {
+					result.Observations = append(result.Observations, action.Observation{
+						Description: fmt.Sprintf("%s (up to date)", decl.Path),
+					})
+				}
 			} else {
 				result.Actions = append(result.Actions, acts...)
 			}
 
 		case script.DeclPackage:
-			packages = append(packages, action.DesiredPackage{Name: decl.PackageName})
+			packages = append(packages, action.DesiredPackage{
+				Name:   decl.PackageName,
+				Absent: decl.State == script.DeclAbsent,
+			})
 
 		case script.DeclDefaults:
 			factKey := fmt.Sprintf("defaults:%s:%s", decl.DefaultsDomain, decl.DefaultsKey)
@@ -277,11 +307,18 @@ func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, de
 				Domain: decl.DefaultsDomain,
 				Key:    decl.DefaultsKey,
 				Value:  decl.DefaultsValue,
+				Absent: decl.State == script.DeclAbsent,
 			}, defaultsFact)
 			if len(acts) == 0 {
-				result.Observations = append(result.Observations, action.Observation{
-					Description: fmt.Sprintf("defaults %s %s (up to date)", decl.DefaultsDomain, decl.DefaultsKey),
-				})
+				if decl.State == script.DeclAbsent {
+					result.Observations = append(result.Observations, action.Observation{
+						Description: fmt.Sprintf("defaults %s %s (already absent)", decl.DefaultsDomain, decl.DefaultsKey),
+					})
+				} else {
+					result.Observations = append(result.Observations, action.Observation{
+						Description: fmt.Sprintf("defaults %s %s (up to date)", decl.DefaultsDomain, decl.DefaultsKey),
+					})
+				}
 			} else {
 				result.Actions = append(result.Actions, acts...)
 			}
@@ -335,12 +372,14 @@ func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, de
 				Source:  filepath.Join(e.sourceDir, decl.FontSource),
 				Name:    decl.FontName,
 				DestDir: decl.FontDestDir,
+				Absent:  decl.State == script.DeclAbsent,
 			})
 
 		case script.DeclMiseTool:
 			miseTools = append(miseTools, action.DesiredMiseTool{
 				Name:    decl.MiseToolName,
 				Version: decl.MiseToolVersion,
+				Absent:  decl.State == script.DeclAbsent,
 			})
 
 		case script.DeclShell:
@@ -374,18 +413,22 @@ func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, de
 			return action.PlanResult{}, err
 		}
 
-		// Separate installed packages (observations) from those needing install (actions)
-		needsInstall := make(map[string]bool, len(pkgActions))
+		// Separate packages needing action from those already in desired state
+		hasAction := make(map[string]bool, len(pkgActions))
 		for _, a := range pkgActions {
-			needsInstall[a.PackageName] = true
+			hasAction[a.PackageName] = true
 		}
 		for _, pkg := range packages {
-			if needsInstall[pkg.Name] {
-				// action already in pkgActions
-			} else {
-				result.Observations = append(result.Observations, action.Observation{
-					Description: fmt.Sprintf("%s (installed)", pkg.Name),
-				})
+			if !hasAction[pkg.Name] {
+				if pkg.Absent {
+					result.Observations = append(result.Observations, action.Observation{
+						Description: fmt.Sprintf("%s (already absent)", pkg.Name),
+					})
+				} else {
+					result.Observations = append(result.Observations, action.Observation{
+						Description: fmt.Sprintf("%s (installed)", pkg.Name),
+					})
+				}
 			}
 		}
 		result.Actions = append(result.Actions, pkgActions...)
@@ -404,8 +447,14 @@ func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, de
 				return action.PlanResult{}, err
 			}
 			acts := action.DiffFonts(dirFonts, fontFact)
+			isInstalled := fontFact != nil && len(fontFact.Installed) > 0
 			for _, df := range dirFonts {
-				if fontFact != nil && fontFact.Installed[df.Name] {
+				installed := isInstalled && fontFact.Installed[df.Name]
+				if df.Absent && !installed {
+					result.Observations = append(result.Observations, action.Observation{
+						Description: fmt.Sprintf("font %s (already absent)", df.Name),
+					})
+				} else if !df.Absent && installed {
 					result.Observations = append(result.Observations, action.Observation{
 						Description: fmt.Sprintf("font %s (installed)", df.Name),
 					})
@@ -426,15 +475,21 @@ func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, de
 			return action.PlanResult{}, err
 		}
 
-		needsInstall := make(map[string]bool, len(miseActions))
+		hasAction := make(map[string]bool, len(miseActions))
 		for _, a := range miseActions {
-			needsInstall[a.MiseToolName] = true
+			hasAction[a.MiseToolName] = true
 		}
 		for _, tool := range miseTools {
-			if !needsInstall[tool.Name] {
-				result.Observations = append(result.Observations, action.Observation{
-					Description: fmt.Sprintf("mise %s (installed)", tool.Name),
-				})
+			if !hasAction[tool.Name] {
+				if tool.Absent {
+					result.Observations = append(result.Observations, action.Observation{
+						Description: fmt.Sprintf("mise %s (already absent)", tool.Name),
+					})
+				} else {
+					result.Observations = append(result.Observations, action.Observation{
+						Description: fmt.Sprintf("mise %s (installed)", tool.Name),
+					})
+				}
 			}
 		}
 		result.Actions = append(result.Actions, miseActions...)

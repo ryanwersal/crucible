@@ -69,6 +69,25 @@ func TestDiffFile(t *testing.T) {
 			wantActions: 2,
 			wantType:    DeletePath,
 		},
+		{
+			name:        "absent and file exists",
+			desired:     DesiredFile{Path: "/tmp/test.txt", Absent: true},
+			actual:      &fact.FileInfo{Exists: true},
+			wantActions: 1,
+			wantType:    DeletePath,
+		},
+		{
+			name:        "absent and file does not exist",
+			desired:     DesiredFile{Path: "/tmp/test.txt", Absent: true},
+			actual:      nil,
+			wantActions: 0,
+		},
+		{
+			name:        "absent but is directory",
+			desired:     DesiredFile{Path: "/tmp/test.txt", Absent: true},
+			actual:      &fact.FileInfo{Exists: true, IsDir: true},
+			wantActions: 0,
+		},
 	}
 
 	for _, tt := range tests {

@@ -464,6 +464,188 @@ func TestShell_WithUser(t *testing.T) {
 	}
 }
 
+func TestFile_Absent(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.file("~/.old-config", { state: "absent" })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(*decls) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(*decls))
+	}
+	d := (*decls)[0]
+	if d.Type != decl.File {
+		t.Errorf("type = %v, want File", d.Type)
+	}
+	if d.State != decl.Absent {
+		t.Errorf("state = %v, want Absent", d.State)
+	}
+	if d.Path != "/home/user/.old-config" {
+		t.Errorf("path = %q", d.Path)
+	}
+	if len(d.Content) != 0 {
+		t.Errorf("content should be empty for absent file, got %q", d.Content)
+	}
+}
+
+func TestDir_Absent(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.dir("~/.cache/old", { state: "absent" })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d := (*decls)[0]
+	if d.Type != decl.Dir {
+		t.Errorf("type = %v, want Dir", d.Type)
+	}
+	if d.State != decl.Absent {
+		t.Errorf("state = %v, want Absent", d.State)
+	}
+}
+
+func TestSymlink_Absent(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.symlink("~/.vimrc", { state: "absent" })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d := (*decls)[0]
+	if d.Type != decl.Symlink {
+		t.Errorf("type = %v, want Symlink", d.Type)
+	}
+	if d.State != decl.Absent {
+		t.Errorf("state = %v, want Absent", d.State)
+	}
+	if d.LinkTarget != "" {
+		t.Errorf("target should be empty for absent symlink, got %q", d.LinkTarget)
+	}
+}
+
+func TestBrew_Absent(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.brew("wget", { state: "absent" })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d := (*decls)[0]
+	if d.Type != decl.Package {
+		t.Errorf("type = %v, want Package", d.Type)
+	}
+	if d.State != decl.Absent {
+		t.Errorf("state = %v, want Absent", d.State)
+	}
+	if d.PackageName != "wget" {
+		t.Errorf("name = %q", d.PackageName)
+	}
+}
+
+func TestBrew_AbsentArray(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.brew(["wget", "curl"], { state: "absent" })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(*decls) != 2 {
+		t.Fatalf("expected 2 declarations, got %d", len(*decls))
+	}
+	for i, d := range *decls {
+		if d.State != decl.Absent {
+			t.Errorf("[%d] state = %v, want Absent", i, d.State)
+		}
+	}
+}
+
+func TestDefaults_Absent(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.defaults("com.apple.dock", "expose-animation-duration", { state: "absent" })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d := (*decls)[0]
+	if d.Type != decl.Defaults {
+		t.Errorf("type = %v, want Defaults", d.Type)
+	}
+	if d.State != decl.Absent {
+		t.Errorf("state = %v, want Absent", d.State)
+	}
+	if d.DefaultsDomain != "com.apple.dock" {
+		t.Errorf("domain = %q", d.DefaultsDomain)
+	}
+	if d.DefaultsKey != "expose-animation-duration" {
+		t.Errorf("key = %q", d.DefaultsKey)
+	}
+}
+
+func TestFont_Absent(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.font("fonts/Old.ttf", { state: "absent" })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d := (*decls)[0]
+	if d.Type != decl.Font {
+		t.Errorf("type = %v, want Font", d.Type)
+	}
+	if d.State != decl.Absent {
+		t.Errorf("state = %v, want Absent", d.State)
+	}
+	if d.FontName != "Old.ttf" {
+		t.Errorf("name = %q", d.FontName)
+	}
+}
+
+func TestMise_Absent(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.mise("python", { state: "absent" })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d := (*decls)[0]
+	if d.Type != decl.MiseTool {
+		t.Errorf("type = %v, want MiseTool", d.Type)
+	}
+	if d.State != decl.Absent {
+		t.Errorf("state = %v, want Absent", d.State)
+	}
+	if d.MiseToolName != "python" {
+		t.Errorf("name = %q", d.MiseToolName)
+	}
+}
+
+func TestMise_InvalidSecondArg(t *testing.T) {
+	t.Parallel()
+	vm, _ := setupModule(t)
+
+	_, err := vm.RunString(`c.mise("python", { foo: "bar" })`)
+	if err == nil {
+		t.Fatal("expected error for mise() with invalid options object")
+	}
+}
+
 func TestExpandPath(t *testing.T) {
 	t.Parallel()
 

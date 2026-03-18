@@ -10,10 +10,22 @@ import (
 type DesiredSymlink struct {
 	Path   string
 	Target string
+	Absent bool // true = ensure the symlink does not exist
 }
 
 // DiffSymlink compares the desired symlink state against the actual state.
 func DiffSymlink(desired DesiredSymlink, actual *fact.SymlinkInfo) []Action {
+	if desired.Absent {
+		if actual != nil && actual.Exists {
+			return []Action{{
+				Type:        DeletePath,
+				Path:        desired.Path,
+				Description: fmt.Sprintf("remove symlink %s", desired.Path),
+			}}
+		}
+		return nil
+	}
+
 	if actual == nil || !actual.Exists {
 		return []Action{{
 			Type:        CreateSymlink,

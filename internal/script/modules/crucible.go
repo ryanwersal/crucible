@@ -49,6 +49,18 @@ func (m *CrucibleModule) Export() *goja.Object {
 	return obj
 }
 
+// isAbsent returns true if the options object has state: "absent".
+func (m *CrucibleModule) isAbsent(opts *goja.Object) bool {
+	if opts == nil {
+		return false
+	}
+	v := opts.Get("state")
+	if v == nil || goja.IsUndefined(v) {
+		return false
+	}
+	return v.String() == "absent"
+}
+
 // expandPath resolves ~ to the target directory and cleans the path.
 func (m *CrucibleModule) expandPath(path string) string {
 	if strings.HasPrefix(path, "~/") {
@@ -70,7 +82,7 @@ func (m *CrucibleModule) file(call goja.FunctionCall) goja.Value {
 	}
 
 	path := m.expandPath(call.Arguments[0].String())
-	decl := decl.Declaration{
+	d := decl.Declaration{
 		Type: decl.File,
 		Path: path,
 		Mode: 0o644, // default
@@ -78,10 +90,14 @@ func (m *CrucibleModule) file(call goja.FunctionCall) goja.Value {
 
 	if len(call.Arguments) >= 2 {
 		opts := call.Arguments[1].ToObject(m.vm)
-		m.applyFileOpts(&decl, opts)
+		if m.isAbsent(opts) {
+			d.State = decl.Absent
+		} else {
+			m.applyFileOpts(&d, opts)
+		}
 	}
 
-	*m.declarations = append(*m.declarations, decl)
+	*m.declarations = append(*m.declarations, d)
 	return goja.Undefined()
 }
 
@@ -111,7 +127,7 @@ func (m *CrucibleModule) dir(call goja.FunctionCall) goja.Value {
 	}
 
 	path := m.expandPath(call.Arguments[0].String())
-	decl := decl.Declaration{
+	d := decl.Declaration{
 		Type: decl.Dir,
 		Path: path,
 		Mode: 0o755, // default
@@ -119,12 +135,14 @@ func (m *CrucibleModule) dir(call goja.FunctionCall) goja.Value {
 
 	if len(call.Arguments) >= 2 {
 		opts := call.Arguments[1].ToObject(m.vm)
-		if v := opts.Get("mode"); v != nil && !goja.IsUndefined(v) {
-			decl.Mode = fs.FileMode(v.ToInteger())
+		if m.isAbsent(opts) {
+			d.State = decl.Absent
+		} else if v := opts.Get("mode"); v != nil && !goja.IsUndefined(v) {
+			d.Mode = fs.FileMode(v.ToInteger())
 		}
 	}
 
-	*m.declarations = append(*m.declarations, decl)
+	*m.declarations = append(*m.declarations, d)
 	return goja.Undefined()
 }
 
@@ -138,18 +156,26 @@ func (m *CrucibleModule) symlink(call goja.FunctionCall) goja.Value {
 	path := m.expandPath(call.Arguments[0].String())
 	opts := call.Arguments[1].ToObject(m.vm)
 
+	if m.isAbsent(opts) {
+		*m.declarations = append(*m.declarations, decl.Declaration{
+			Type:  decl.Symlink,
+			Path:  path,
+			State: decl.Absent,
+		})
+		return goja.Undefined()
+	}
+
 	targetVal := opts.Get("target")
 	if targetVal == nil || goja.IsUndefined(targetVal) {
 		panic(m.vm.NewGoError(fmt.Errorf("symlink() requires a target option")))
 	}
 
-	decl := decl.Declaration{
+	*m.declarations = append(*m.declarations, decl.Declaration{
 		Type:       decl.Symlink,
 		Path:       path,
 		LinkTarget: m.expandPath(targetVal.String()),
-	}
+	})
 
-	*m.declarations = append(*m.declarations, decl)
 	return goja.Undefined()
 }
 
@@ -163,12 +189,21 @@ func (m *CrucibleModule) brew(call goja.FunctionCall) goja.Value {
 		panic(m.vm.NewGoError(fmt.Errorf("brew() requires a package name argument")))
 	}
 
+	var state decl.State
+	if len(call.Arguments) >= 2 {
+		opts := call.Arguments[1].ToObject(m.vm)
+		if m.isAbsent(opts) {
+			state = decl.Absent
+		}
+	}
+
 	exported := call.Arguments[0].Export()
 	switch v := exported.(type) {
 	case string:
 		*m.declarations = append(*m.declarations, decl.Declaration{
 			Type:        decl.Package,
 			PackageName: v,
+			State:       state,
 		})
 	case []any:
 		for _, item := range v {
@@ -179,6 +214,7 @@ func (m *CrucibleModule) brew(call goja.FunctionCall) goja.Value {
 			*m.declarations = append(*m.declarations, decl.Declaration{
 				Type:        decl.Package,
 				PackageName: s,
+				State:       state,
 			})
 		}
 	default:
@@ -201,15 +237,27 @@ func (m *CrucibleModule) defaults(call goja.FunctionCall) goja.Value {
 
 	// Check if second arg is an object (multi-key form) or string (3-arg form)
 	if len(call.Arguments) >= 3 {
-		// 3-arg form: defaults(domain, key, value)
 		key := call.Arguments[1].String()
-		value := m.coerceDefaultsValue(call.Arguments[2])
-		*m.declarations = append(*m.declarations, decl.Declaration{
-			Type:           decl.Defaults,
-			DefaultsDomain: domain,
-			DefaultsKey:    key,
-			DefaultsValue:  value,
-		})
+
+		// Check if third arg is an options object with state key
+		thirdArg := call.Arguments[2]
+		if obj := thirdArg.ToObject(m.vm); obj != nil && m.isAbsent(obj) {
+			*m.declarations = append(*m.declarations, decl.Declaration{
+				Type:           decl.Defaults,
+				DefaultsDomain: domain,
+				DefaultsKey:    key,
+				State:          decl.Absent,
+			})
+		} else {
+			// 3-arg form: defaults(domain, key, value)
+			value := m.coerceDefaultsValue(thirdArg)
+			*m.declarations = append(*m.declarations, decl.Declaration{
+				Type:           decl.Defaults,
+				DefaultsDomain: domain,
+				DefaultsKey:    key,
+				DefaultsValue:  value,
+			})
+		}
 	} else {
 		// Object form: defaults(domain, { key: value, ... })
 		obj := call.Arguments[1].ToObject(m.vm)
@@ -332,13 +380,17 @@ func (m *CrucibleModule) font(call goja.FunctionCall) goja.Value {
 	}
 
 	destDir := filepath.Join(m.targetDir, "Library", "Fonts")
+	var state decl.State
 
 	// Check for options in the last argument
 	args := call.Arguments
 	if len(args) >= 2 {
 		lastArg := args[len(args)-1]
 		if obj := lastArg.ToObject(m.vm); obj != nil {
-			if v := obj.Get("dest"); v != nil && !goja.IsUndefined(v) {
+			if m.isAbsent(obj) {
+				state = decl.Absent
+				args = args[:len(args)-1]
+			} else if v := obj.Get("dest"); v != nil && !goja.IsUndefined(v) {
 				destDir = m.expandPath(v.String())
 				args = args[:len(args)-1]
 			}
@@ -367,6 +419,7 @@ func (m *CrucibleModule) font(call goja.FunctionCall) goja.Value {
 			FontSource:  src,
 			FontName:    filepath.Base(src),
 			FontDestDir: destDir,
+			State:       state,
 		})
 	}
 
@@ -378,20 +431,41 @@ func (m *CrucibleModule) font(call goja.FunctionCall) goja.Value {
 //
 //	c.mise("node", "22")
 func (m *CrucibleModule) mise(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 2 {
-		panic(m.vm.NewGoError(fmt.Errorf("mise() requires tool name and version arguments")))
+	if len(call.Arguments) < 1 {
+		panic(m.vm.NewGoError(fmt.Errorf("mise() requires a tool name argument")))
 	}
 
 	name := call.Arguments[0].String()
-	version := call.Arguments[1].String()
 
-	*m.declarations = append(*m.declarations, decl.Declaration{
-		Type:            decl.MiseTool,
-		MiseToolName:    name,
-		MiseToolVersion: version,
-	})
+	if len(call.Arguments) < 2 {
+		panic(m.vm.NewGoError(fmt.Errorf("mise() requires a version argument (or { state: \"absent\" })")))
+	}
 
-	return goja.Undefined()
+	// Check if second arg is a version string or an options object
+	second := call.Arguments[1]
+	exported := second.Export()
+	if _, isString := exported.(string); isString {
+		// mise("python", "3.12") — install form
+		*m.declarations = append(*m.declarations, decl.Declaration{
+			Type:            decl.MiseTool,
+			MiseToolName:    name,
+			MiseToolVersion: second.String(),
+		})
+		return goja.Undefined()
+	}
+
+	// Object form: mise("python", { state: "absent" })
+	opts := second.ToObject(m.vm)
+	if m.isAbsent(opts) {
+		*m.declarations = append(*m.declarations, decl.Declaration{
+			Type:         decl.MiseTool,
+			MiseToolName: name,
+			State:        decl.Absent,
+		})
+		return goja.Undefined()
+	}
+
+	panic(m.vm.NewGoError(fmt.Errorf("mise() second argument must be a version string or { state: \"absent\" }")))
 }
 
 // shell declares the desired login shell for the current user.

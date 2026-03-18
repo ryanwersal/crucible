@@ -42,6 +42,22 @@ func TestDiffDir(t *testing.T) {
 			wantActions: 1,
 			wantType:    SetPermissions,
 		},
+		{
+			name:    "absent and exists",
+			desired: DesiredDir{Path: "/tmp/dir", Absent: true},
+			actual: &fact.DirInfo{
+				Exists: true,
+				Mode:   0o755,
+			},
+			wantActions: 1,
+			wantType:    DeletePath,
+		},
+		{
+			name:        "absent and does not exist",
+			desired:     DesiredDir{Path: "/tmp/dir", Absent: true},
+			actual:      nil,
+			wantActions: 0,
+		},
 	}
 
 	for _, tt := range tests {
