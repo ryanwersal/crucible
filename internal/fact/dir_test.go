@@ -10,8 +10,12 @@ import (
 func TestDirCollector_ExistingDir(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0o644)
-	os.WriteFile(filepath.Join(dir, "b.txt"), []byte("b"), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.txt"), []byte("b"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	c := DirCollector{Path: dir}
 	info, err := c.Collect(context.Background())
@@ -43,7 +47,9 @@ func TestDirCollector_FileNotDir(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "file.txt")
-	os.WriteFile(path, []byte("not a dir"), 0o644)
+	if err := os.WriteFile(path, []byte("not a dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	c := DirCollector{Path: path}
 	info, err := c.Collect(context.Background())

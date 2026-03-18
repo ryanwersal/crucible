@@ -207,6 +207,8 @@ func (e *Engine) planScript(ctx context.Context, store *fact.Store, scriptConten
 func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, decls []script.Declaration) (action.PlanResult, error) {
 	var result action.PlanResult
 	var packages []action.DesiredPackage
+	var fonts []action.DesiredFont
+	var miseTools []action.DesiredMiseTool
 
 	for _, decl := range decls {
 		switch decl.Type {
@@ -261,6 +263,103 @@ func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, de
 
 		case script.DeclPackage:
 			packages = append(packages, action.DesiredPackage{Name: decl.PackageName})
+
+		case script.DeclDefaults:
+			factKey := fmt.Sprintf("defaults:%s:%s", decl.DefaultsDomain, decl.DefaultsKey)
+			defaultsFact, err := fact.Get(ctx, store, factKey, fact.DefaultsCollector{
+				Domain: decl.DefaultsDomain,
+				Key:    decl.DefaultsKey,
+			})
+			if err != nil {
+				return action.PlanResult{}, err
+			}
+			acts := action.DiffDefaults(action.DesiredDefault{
+				Domain: decl.DefaultsDomain,
+				Key:    decl.DefaultsKey,
+				Value:  decl.DefaultsValue,
+			}, defaultsFact)
+			if len(acts) == 0 {
+				result.Observations = append(result.Observations, action.Observation{
+					Description: fmt.Sprintf("defaults %s %s (up to date)", decl.DefaultsDomain, decl.DefaultsKey),
+				})
+			} else {
+				result.Actions = append(result.Actions, acts...)
+			}
+
+		case script.DeclDock:
+			dockFact, err := fact.Get(ctx, store, "dock", fact.DockCollector{HomeDir: e.targetDir})
+			if err != nil {
+				return action.PlanResult{}, err
+			}
+			desiredFolders := make([]action.DockFolder, len(decl.DockFolders))
+			for i, f := range decl.DockFolders {
+				desiredFolders[i] = action.DockFolder{
+					Path:    f.Path,
+					View:    f.View,
+					Display: f.Display,
+				}
+			}
+			acts := action.DiffDock(action.DesiredDock{
+				Apps:    decl.DockApps,
+				Folders: desiredFolders,
+			}, dockFact)
+			if len(acts) == 0 {
+				result.Observations = append(result.Observations, action.Observation{
+					Description: "dock layout (up to date)",
+				})
+			} else {
+				result.Actions = append(result.Actions, acts...)
+			}
+
+		case script.DeclGitRepo:
+			factKey := fmt.Sprintf("gitrepo:%s", decl.Path)
+			repoFact, err := fact.Get(ctx, store, factKey, fact.GitRepoCollector{Path: decl.Path})
+			if err != nil {
+				return action.PlanResult{}, err
+			}
+			acts, obs := action.DiffGitRepo(action.DesiredGitRepo{
+				Path:   decl.Path,
+				URL:    decl.GitURL,
+				Branch: decl.GitBranch,
+			}, repoFact)
+			result.Actions = append(result.Actions, acts...)
+			result.Observations = append(result.Observations, obs...)
+			if len(acts) == 0 && len(obs) == 0 {
+				result.Observations = append(result.Observations, action.Observation{
+					Description: fmt.Sprintf("%s (up to date)", decl.Path),
+				})
+			}
+
+		case script.DeclFont:
+			fonts = append(fonts, action.DesiredFont{
+				Source:  filepath.Join(e.sourceDir, decl.FontSource),
+				Name:    decl.FontName,
+				DestDir: decl.FontDestDir,
+			})
+
+		case script.DeclMiseTool:
+			miseTools = append(miseTools, action.DesiredMiseTool{
+				Name:    decl.MiseToolName,
+				Version: decl.MiseToolVersion,
+			})
+
+		case script.DeclShell:
+			username := decl.ShellUsername
+			shellFact, err := fact.Get(ctx, store, "shell:"+username, fact.ShellCollector{Username: username})
+			if err != nil {
+				return action.PlanResult{}, err
+			}
+			acts := action.DiffShell(action.DesiredShell{
+				Path:     decl.ShellPath,
+				Username: username,
+			}, shellFact)
+			if len(acts) == 0 {
+				result.Observations = append(result.Observations, action.Observation{
+					Description: fmt.Sprintf("shell %s (up to date)", decl.ShellPath),
+				})
+			} else {
+				result.Actions = append(result.Actions, acts...)
+			}
 		}
 	}
 
@@ -290,6 +389,55 @@ func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, de
 			}
 		}
 		result.Actions = append(result.Actions, pkgActions...)
+	}
+
+	// Batch all font declarations
+	if len(fonts) > 0 {
+		// Group fonts by destination directory for single fact collection per dir
+		byDir := make(map[string][]action.DesiredFont)
+		for _, f := range fonts {
+			byDir[f.DestDir] = append(byDir[f.DestDir], f)
+		}
+		for dir, dirFonts := range byDir {
+			fontFact, err := fact.Get(ctx, store, "fonts:"+dir, fact.FontCollector{Dir: dir})
+			if err != nil {
+				return action.PlanResult{}, err
+			}
+			acts := action.DiffFonts(dirFonts, fontFact)
+			for _, df := range dirFonts {
+				if fontFact != nil && fontFact.Installed[df.Name] {
+					result.Observations = append(result.Observations, action.Observation{
+						Description: fmt.Sprintf("font %s (installed)", df.Name),
+					})
+				}
+			}
+			result.Actions = append(result.Actions, acts...)
+		}
+	}
+
+	// Batch all mise tool declarations
+	if len(miseTools) > 0 {
+		miseFact, err := fact.Get(ctx, store, "mise", fact.MiseCollector{})
+		if err != nil {
+			return action.PlanResult{}, err
+		}
+		miseActions, err := action.DiffMise(miseTools, miseFact)
+		if err != nil {
+			return action.PlanResult{}, err
+		}
+
+		needsInstall := make(map[string]bool, len(miseActions))
+		for _, a := range miseActions {
+			needsInstall[a.MiseToolName] = true
+		}
+		for _, tool := range miseTools {
+			if !needsInstall[tool.Name] {
+				result.Observations = append(result.Observations, action.Observation{
+					Description: fmt.Sprintf("mise %s (installed)", tool.Name),
+				})
+			}
+		}
+		result.Actions = append(result.Actions, miseActions...)
 	}
 
 	return result, nil

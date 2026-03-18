@@ -17,7 +17,7 @@ func TestFactsToTemplateData(t *testing.T) {
 	ctx := context.Background()
 	store := fact.NewStore()
 	// Pre-collect OS facts so the store has them cached
-	fact.Get(ctx, store, "os", fact.OSCollector{})
+	_, _ = fact.Get(ctx, store, "os", fact.OSCollector{})
 
 	logger := slog.New(slog.DiscardHandler)
 	data := factsToTemplateData(ctx, logger, store)
@@ -91,7 +91,9 @@ func TestResolveContent_TemplateWithAutoFacts(t *testing.T) {
 
 	// Template that uses auto-injected facts and a template function
 	tmplContent := `OS: {{ .os.name }}, Arch: {{ .os.arch }}, Home: {{ env "HOME" | default "/unknown" }}`
-	os.WriteFile(filepath.Join(src, "config.tmpl"), []byte(tmplContent), 0o644)
+	if err := os.WriteFile(filepath.Join(src, "config.tmpl"), []byte(tmplContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	scriptContent := []byte(`
 		var c = require("crucible");
@@ -100,7 +102,7 @@ func TestResolveContent_TemplateWithAutoFacts(t *testing.T) {
 
 	ctx := context.Background()
 	store := fact.NewStore()
-	fact.Get(ctx, store, "os", fact.OSCollector{})
+	_, _ = fact.Get(ctx, store, "os", fact.OSCollector{})
 
 	rt := NewRuntime(ctx, slog.New(slog.DiscardHandler), src, tgt, store)
 	_, err := rt.Execute(ctx, "crucible.js", scriptContent)
@@ -132,7 +134,9 @@ func TestResolveContent_UserDataOverridesFacts(t *testing.T) {
 	tgt := t.TempDir()
 
 	tmplContent := `OS: {{ .os }}`
-	os.WriteFile(filepath.Join(src, "override.tmpl"), []byte(tmplContent), 0o644)
+	if err := os.WriteFile(filepath.Join(src, "override.tmpl"), []byte(tmplContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	// User provides a flat "os" string that should override the auto-injected map
 	scriptContent := []byte(`
@@ -142,7 +146,7 @@ func TestResolveContent_UserDataOverridesFacts(t *testing.T) {
 
 	ctx := context.Background()
 	store := fact.NewStore()
-	fact.Get(ctx, store, "os", fact.OSCollector{})
+	_, _ = fact.Get(ctx, store, "os", fact.OSCollector{})
 
 	rt := NewRuntime(ctx, slog.New(slog.DiscardHandler), src, tgt, store)
 	_, err := rt.Execute(ctx, "crucible.js", scriptContent)

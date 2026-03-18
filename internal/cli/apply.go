@@ -26,11 +26,11 @@ func newApplyCmd(opts *rootOpts) *cobra.Command {
 					return err
 				}
 				printResult(w, result)
-				fmt.Fprintln(w)
+				_, _ = fmt.Fprintln(w)
 				if len(result.Actions) == 0 {
-					fmt.Fprintln(w, "Everything up to date.")
+					_, _ = fmt.Fprintln(w, "Everything up to date.")
 				} else {
-					fmt.Fprintf(w, "%d action(s) would be taken.\n", len(result.Actions))
+					_, _ = fmt.Fprintf(w, "%d action(s) would be taken.\n", len(result.Actions))
 				}
 				return nil
 			}
@@ -40,11 +40,11 @@ func newApplyCmd(opts *rootOpts) *cobra.Command {
 				return err
 			}
 			printResult(w, result)
-			fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w)
 			if len(result.Actions) == 0 {
-				fmt.Fprintln(w, "Everything up to date.")
+				_, _ = fmt.Fprintln(w, "Everything up to date.")
 			} else {
-				fmt.Fprintf(w, "%d action(s) applied.\n", len(result.Actions))
+				_, _ = fmt.Fprintf(w, "%d action(s) applied.\n", len(result.Actions))
 			}
 			return nil
 		},
@@ -57,9 +57,9 @@ func newApplyCmd(opts *rootOpts) *cobra.Command {
 // printResult writes observations and actions to w using ✓/→ symbols.
 func printResult(w io.Writer, result action.PlanResult) {
 	for _, o := range result.Observations {
-		fmt.Fprintf(w, "  ✓ %s\n", o.Description)
+		_, _ = fmt.Fprintf(w, "  ✓ %s\n", o.Description)
 	}
 	for _, a := range result.Actions {
-		fmt.Fprintf(w, "  → %s\n", a.Description)
+		_, _ = fmt.Fprintf(w, "  → %s\n", a.Description)
 	}
 }

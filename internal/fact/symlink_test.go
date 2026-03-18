@@ -13,8 +13,12 @@ func TestSymlinkCollector_ExistingSymlink(t *testing.T) {
 	target := filepath.Join(dir, "target")
 	link := filepath.Join(dir, "link")
 
-	os.WriteFile(target, []byte("t"), 0o644)
-	os.Symlink(target, link)
+	if err := os.WriteFile(target, []byte("t"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
 
 	c := SymlinkCollector{Path: link}
 	info, err := c.Collect(context.Background())
@@ -46,7 +50,9 @@ func TestSymlinkCollector_RegularFile(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "regular.txt")
-	os.WriteFile(path, []byte("not a link"), 0o644)
+	if err := os.WriteFile(path, []byte("not a link"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	c := SymlinkCollector{Path: path}
 	info, err := c.Collect(context.Background())

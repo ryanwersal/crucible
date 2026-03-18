@@ -12,7 +12,9 @@ func TestLoader_EntryPoint_Found(t *testing.T) {
 	dir := t.TempDir()
 
 	content := []byte(`var x = 1;`)
-	os.WriteFile(filepath.Join(dir, "crucible.js"), content, 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "crucible.js"), content, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	loader := NewLoader(dir)
 	path, got, err := loader.EntryPoint()
@@ -43,8 +45,10 @@ func TestLoader_EntryPoint_PermissionError(t *testing.T) {
 	dir := t.TempDir()
 
 	path := filepath.Join(dir, "crucible.js")
-	os.WriteFile(path, []byte("x"), 0o000)
-	t.Cleanup(func() { os.Chmod(path, 0o644) })
+	if err := os.WriteFile(path, []byte("x"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
 
 	loader := NewLoader(dir)
 	_, _, err := loader.EntryPoint()

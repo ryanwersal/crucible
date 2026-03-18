@@ -10,11 +10,18 @@ import "github.com/ryanwersal/crucible/internal/script/decl"
 type (
 	Declaration     = decl.Declaration
 	DeclarationType = decl.Type
+	DockFolder      = decl.DockFolder
 )
 
 const (
-	DeclFile    = decl.File
-	DeclDir     = decl.Dir
-	DeclSymlink = decl.Symlink
-	DeclPackage = decl.Package
+	DeclFile     = decl.File
+	DeclDir      = decl.Dir
+	DeclSymlink  = decl.Symlink
+	DeclPackage  = decl.Package
+	DeclDefaults = decl.Defaults
+	DeclDock     = decl.Dock
+	DeclGitRepo  = decl.GitRepo
+	DeclFont     = decl.Font
+	DeclMiseTool = decl.MiseTool
+	DeclShell    = decl.Shell
 )

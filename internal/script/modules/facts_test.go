@@ -19,10 +19,10 @@ func setupFactsModule(t *testing.T) (*goja.Runtime, *fact.Store) {
 	ctx := context.Background()
 
 	// Pre-collect OS facts so they're cached
-	fact.Get(ctx, store, "os", fact.OSCollector{})
+	_, _ = fact.Get(ctx, store, "os", fact.OSCollector{})
 
 	mod := NewFactsModule(vm, ctx, store)
-	vm.Set("facts", mod.Export())
+	_ = vm.Set("facts", mod.Export())
 	return vm, store
 }
 
@@ -53,9 +53,11 @@ func TestFacts_File(t *testing.T) {
 
 	dir := t.TempDir()
 	testFile := filepath.Join(dir, "test.txt")
-	os.WriteFile(testFile, []byte("hello"), 0o644)
+	if err := os.WriteFile(testFile, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
-	vm.Set("testPath", testFile)
+	_ = vm.Set("testPath", testFile)
 	v, err := vm.RunString(`var f = facts.file(testPath); f.exists`)
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +71,7 @@ func TestFacts_File_NotExist(t *testing.T) {
 	t.Parallel()
 	vm, _ := setupFactsModule(t)
 
-	vm.Set("testPath", "/nonexistent/path/file.txt")
+	_ = vm.Set("testPath", "/nonexistent/path/file.txt")
 	v, err := vm.RunString(`facts.file(testPath).exists`)
 	if err != nil {
 		t.Fatal(err)
@@ -84,9 +86,11 @@ func TestFacts_Dir(t *testing.T) {
 	vm, _ := setupFactsModule(t)
 
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "child.txt"), []byte("x"), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "child.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
-	vm.Set("testPath", dir)
+	_ = vm.Set("testPath", dir)
 	v, err := vm.RunString(`var d = facts.dir(testPath); d.exists`)
 	if err != nil {
 		t.Fatal(err)

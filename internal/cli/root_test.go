@@ -45,7 +45,9 @@ func TestApplyCmd_DryRun_ShowsActions(t *testing.T) {
 	t.Parallel()
 	src := t.TempDir()
 	tgt := t.TempDir()
-	os.WriteFile(filepath.Join(src, "hello.txt"), []byte("hello"), 0o644)
+	if err := os.WriteFile(filepath.Join(src, "hello.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	stdout, _, run := testCmdDirs(src, tgt)
 
@@ -61,7 +63,9 @@ func TestApplyCmd_DryRun_NoChanges(t *testing.T) {
 	t.Parallel()
 	src := t.TempDir()
 	tgt := t.TempDir()
-	os.WriteFile(filepath.Join(src, "test.txt"), []byte("test"), 0o644)
+	if err := os.WriteFile(filepath.Join(src, "test.txt"), []byte("test"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	_, _, run := testCmdDirs(src, tgt)
 
@@ -77,7 +81,9 @@ func TestApplyCmd_CreatesFiles(t *testing.T) {
 	t.Parallel()
 	src := t.TempDir()
 	tgt := t.TempDir()
-	os.WriteFile(filepath.Join(src, "test.txt"), []byte("applied"), 0o644)
+	if err := os.WriteFile(filepath.Join(src, "test.txt"), []byte("applied"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	_, _, run := testCmdDirs(src, tgt)
 

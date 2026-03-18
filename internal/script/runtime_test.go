@@ -25,11 +25,13 @@ func TestRuntime_ExecuteBasic(t *testing.T) {
 		c.brew("ripgrep");
 	`)
 
-	os.WriteFile(filepath.Join(src, "crucible.js"), scriptContent, 0o644)
+	if err := os.WriteFile(filepath.Join(src, "crucible.js"), scriptContent, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	ctx := context.Background()
 	store := fact.NewStore()
-	fact.Get(ctx, store, "os", fact.OSCollector{})
+	_, _ = fact.Get(ctx, store, "os", fact.OSCollector{})
 
 	rt := NewRuntime(ctx, slog.New(slog.DiscardHandler), src, tgt, store)
 	decls, err := rt.Execute(ctx, "crucible.js", scriptContent)
@@ -77,7 +79,7 @@ func TestRuntime_Facts(t *testing.T) {
 
 	ctx := context.Background()
 	store := fact.NewStore()
-	fact.Get(ctx, store, "os", fact.OSCollector{})
+	_, _ = fact.Get(ctx, store, "os", fact.OSCollector{})
 
 	rt := NewRuntime(ctx, slog.New(slog.DiscardHandler), src, tgt, store)
 	decls, err := rt.Execute(ctx, "crucible.js", scriptContent)
@@ -150,8 +152,12 @@ func TestRuntime_ResolveContent_SourceFile(t *testing.T) {
 	src := t.TempDir()
 	tgt := t.TempDir()
 
-	os.MkdirAll(filepath.Join(src, "fish"), 0o755)
-	os.WriteFile(filepath.Join(src, "fish", "config.fish"), []byte("set -x PATH /usr/local/bin"), 0o644)
+	if err := os.MkdirAll(filepath.Join(src, "fish"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "fish", "config.fish"), []byte("set -x PATH /usr/local/bin"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	scriptContent := []byte(`
 		var c = require("crucible");
@@ -161,7 +167,7 @@ func TestRuntime_ResolveContent_SourceFile(t *testing.T) {
 	ctx := context.Background()
 	store := fact.NewStore()
 	rt := NewRuntime(ctx, slog.New(slog.DiscardHandler), src, tgt, store)
-	decls, err := rt.Execute(ctx, "crucible.js", scriptContent)
+	_, err := rt.Execute(ctx, "crucible.js", scriptContent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +176,7 @@ func TestRuntime_ResolveContent_SourceFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	decls = rt.Declarations()
+	decls := rt.Declarations()
 	if string(decls[0].Content) != "set -x PATH /usr/local/bin" {
 		t.Errorf("content = %q", decls[0].Content)
 	}
@@ -182,7 +188,9 @@ func TestRuntime_ResolveContent_Template(t *testing.T) {
 	src := t.TempDir()
 	tgt := t.TempDir()
 
-	os.WriteFile(filepath.Join(src, "greeting.tmpl"), []byte("Hello, {{.name}}!"), 0o644)
+	if err := os.WriteFile(filepath.Join(src, "greeting.tmpl"), []byte("Hello, {{.name}}!"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	scriptContent := []byte(`
 		var c = require("crucible");
@@ -214,17 +222,21 @@ func TestRuntime_RequireRelative(t *testing.T) {
 	tgt := t.TempDir()
 
 	// Create a sub-module
-	os.WriteFile(filepath.Join(src, "work.js"), []byte(`
+	if err := os.WriteFile(filepath.Join(src, "work.js"), []byte(`
 		var c = require("crucible");
 		c.file("~/work.txt", { content: "work stuff" });
-	`), 0o644)
+	`), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	scriptContent := []byte(`
 		var c = require("crucible");
 		c.file("~/main.txt", { content: "main stuff" });
 		require("./work");
 	`)
-	os.WriteFile(filepath.Join(src, "crucible.js"), scriptContent, 0o644)
+	if err := os.WriteFile(filepath.Join(src, "crucible.js"), scriptContent, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	ctx := context.Background()
 	store := fact.NewStore()

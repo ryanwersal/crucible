@@ -1,11 +1,23 @@
 # Examples
 
-## packages
+## getting-started
 
-Installs `helios` (from the `ryanwersal/tools` tap) and `alacritty` via Homebrew.
+Minimal example that installs a couple of Homebrew packages.
 
 ```
-cd examples
+cd examples/getting-started
+crucible apply --dry-run
+crucible apply
+```
+
+## complete
+
+Full macOS system configuration example demonstrating all supported action
+types: Homebrew packages, macOS defaults, Dock layout, git clones, directories,
+and symlinks.
+
+```
+cd examples/complete
 crucible apply --dry-run
 crucible apply
 ```

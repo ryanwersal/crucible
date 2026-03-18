@@ -68,7 +68,9 @@ func TestExecute_CreateSymlink(t *testing.T) {
 	target := filepath.Join(dir, "target.txt")
 	link := filepath.Join(dir, "link.txt")
 
-	os.WriteFile(target, []byte("target"), 0o644)
+	if err := os.WriteFile(target, []byte("target"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	err := Execute(context.Background(), Action{
 		Type:       CreateSymlink,
@@ -92,7 +94,9 @@ func TestExecute_SetPermissions(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.txt")
-	os.WriteFile(path, []byte("test"), 0o644)
+	if err := os.WriteFile(path, []byte("test"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	err := Execute(context.Background(), Action{
 		Type: SetPermissions,
@@ -113,7 +117,9 @@ func TestExecute_DeletePath(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.txt")
-	os.WriteFile(path, []byte("test"), 0o644)
+	if err := os.WriteFile(path, []byte("test"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	err := Execute(context.Background(), Action{
 		Type: DeletePath,

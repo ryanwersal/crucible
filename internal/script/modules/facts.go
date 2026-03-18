@@ -26,10 +26,10 @@ func NewFactsModule(vm *goja.Runtime, ctx context.Context, store *fact.Store) *F
 // Export returns a goja.Object exposing the facts API.
 func (m *FactsModule) Export() *goja.Object {
 	obj := m.vm.NewObject()
-	obj.Set("os", m.osObject())
-	obj.Set("homebrew", m.homebrewObject())
-	obj.Set("file", m.fileFunc())
-	obj.Set("dir", m.dirFunc())
+	_ = obj.Set("os", m.osObject())
+	_ = obj.Set("homebrew", m.homebrewObject())
+	_ = obj.Set("file", m.fileFunc())
+	_ = obj.Set("dir", m.dirFunc())
 	return obj
 }
 
@@ -43,9 +43,9 @@ func (m *FactsModule) osObject() *goja.Object {
 		return obj
 	}
 
-	obj.Set("name", osInfo.OS)
-	obj.Set("arch", osInfo.Arch)
-	obj.Set("hostname", osInfo.Hostname)
+	_ = obj.Set("name", osInfo.OS)
+	_ = obj.Set("arch", osInfo.Arch)
+	_ = obj.Set("hostname", osInfo.Hostname)
 	return obj
 }
 
@@ -54,23 +54,23 @@ func (m *FactsModule) homebrewObject() *goja.Object {
 
 	brewInfo, err := fact.Get(m.ctx, m.store, "homebrew", fact.HomebrewCollector{})
 	if err != nil {
-		obj.Set("available", false)
+		_ = obj.Set("available", false)
 		return obj
 	}
 
-	obj.Set("available", brewInfo.Available)
+	_ = obj.Set("available", brewInfo.Available)
 
 	formulae := make([]string, 0, len(brewInfo.Formulae))
 	for name := range brewInfo.Formulae {
 		formulae = append(formulae, name)
 	}
-	obj.Set("formulae", formulae)
+	_ = obj.Set("formulae", formulae)
 
 	casks := make([]string, 0, len(brewInfo.Casks))
 	for name := range brewInfo.Casks {
 		casks = append(casks, name)
 	}
-	obj.Set("casks", casks)
+	_ = obj.Set("casks", casks)
 	return obj
 }
 
@@ -89,12 +89,12 @@ func (m *FactsModule) fileFunc() func(goja.FunctionCall) goja.Value {
 		}
 
 		obj := m.vm.NewObject()
-		obj.Set("exists", fi.Exists)
-		obj.Set("hash", fi.Hash)
-		obj.Set("mode", int64(fi.Mode))
-		obj.Set("size", fi.Size)
-		obj.Set("isDir", fi.IsDir)
-		obj.Set("isLink", fi.IsLink)
+		_ = obj.Set("exists", fi.Exists)
+		_ = obj.Set("hash", fi.Hash)
+		_ = obj.Set("mode", int64(fi.Mode))
+		_ = obj.Set("size", fi.Size)
+		_ = obj.Set("isDir", fi.IsDir)
+		_ = obj.Set("isLink", fi.IsLink)
 		return obj
 	}
 }
@@ -114,9 +114,9 @@ func (m *FactsModule) dirFunc() func(goja.FunctionCall) goja.Value {
 		}
 
 		obj := m.vm.NewObject()
-		obj.Set("exists", di.Exists)
-		obj.Set("mode", int64(di.Mode))
-		obj.Set("children", di.Children)
+		_ = obj.Set("exists", di.Exists)
+		_ = obj.Set("mode", int64(di.Mode))
+		_ = obj.Set("children", di.Children)
 		return obj
 	}
 }

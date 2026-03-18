@@ -59,8 +59,12 @@ func TestFileCollector_Symlink(t *testing.T) {
 	target := filepath.Join(dir, "target.txt")
 	link := filepath.Join(dir, "link.txt")
 
-	os.WriteFile(target, []byte("target"), 0o644)
-	os.Symlink(target, link)
+	if err := os.WriteFile(target, []byte("target"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
 
 	c := FileCollector{Path: link}
 	info, err := c.Collect(context.Background())

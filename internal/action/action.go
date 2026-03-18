@@ -12,6 +12,13 @@ const (
 	SetPermissions
 	DeletePath
 	InstallPackage
+	SetDefaults
+	SetDock
+	CloneRepo
+	PullRepo
+	InstallFont
+	InstallMiseTool
+	SetShell
 )
 
 func (t Type) String() string {
@@ -28,6 +35,20 @@ func (t Type) String() string {
 		return "DeletePath"
 	case InstallPackage:
 		return "InstallPackage"
+	case SetDefaults:
+		return "SetDefaults"
+	case SetDock:
+		return "SetDock"
+	case CloneRepo:
+		return "CloneRepo"
+	case PullRepo:
+		return "PullRepo"
+	case InstallFont:
+		return "InstallFont"
+	case InstallMiseTool:
+		return "InstallMiseTool"
+	case SetShell:
+		return "SetShell"
 	default:
 		return "Unknown"
 	}
@@ -41,5 +62,26 @@ type Action struct {
 	Content     []byte      // WriteFile
 	Mode        fs.FileMode // WriteFile, CreateDir, SetPermissions
 	LinkTarget  string      // CreateSymlink
-	PackageName string      // InstallPackage
+	PackageName       string      // InstallPackage
+	DefaultsDomain    string      // SetDefaults
+	DefaultsKey       string      // SetDefaults
+	DefaultsValue     any         // SetDefaults
+	DefaultsValueType string      // SetDefaults
+	DockApps          []string    // SetDock
+	DockFolders       []DockFolder // SetDock
+	GitURL            string      // CloneRepo, PullRepo
+	GitBranch         string      // CloneRepo, PullRepo
+	FontSource        string      // InstallFont: source file path
+	FontDest          string      // InstallFont: destination file path
+	MiseToolName      string      // InstallMiseTool
+	MiseToolVersion   string      // InstallMiseTool
+	ShellPath         string      // SetShell
+	ShellUsername     string      // SetShell
+}
+
+// DockFolder describes a folder entry in the Dock.
+type DockFolder struct {
+	Path    string
+	View    string
+	Display string
 }

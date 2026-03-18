@@ -52,12 +52,12 @@ func NewRuntime(ctx context.Context, logger *slog.Logger, sourceDir, targetDir s
 	// Register native modules
 	r.registry.RegisterNativeModule("crucible", func(runtime *goja.Runtime, module *goja.Object) {
 		mod := modules.NewCrucibleModule(runtime, logger, targetDir, &r.declarations)
-		module.Set("exports", mod.Export())
+		_ = module.Set("exports", mod.Export())
 	})
 
 	r.registry.RegisterNativeModule("crucible/facts", func(runtime *goja.Runtime, module *goja.Object) {
 		mod := modules.NewFactsModule(runtime, ctx, store)
-		module.Set("exports", mod.Export())
+		_ = module.Set("exports", mod.Export())
 	})
 
 	return r

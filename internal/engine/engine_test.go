@@ -8,14 +8,28 @@ import (
 	"testing"
 )
 
+func mustWriteFile(t *testing.T, path string, data []byte, perm os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, data, perm); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustMkdirAll(t *testing.T, path string, perm os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(path, perm); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPlan_NewFiles(t *testing.T) {
 	t.Parallel()
 	src := t.TempDir()
 	tgt := t.TempDir()
 
-	os.WriteFile(filepath.Join(src, "hello.txt"), []byte("hello"), 0o644)
-	os.MkdirAll(filepath.Join(src, "subdir"), 0o755)
-	os.WriteFile(filepath.Join(src, "subdir", "nested.txt"), []byte("nested"), 0o644)
+	mustWriteFile(t, filepath.Join(src, "hello.txt"), []byte("hello"), 0o644)
+	mustMkdirAll(t, filepath.Join(src, "subdir"), 0o755)
+	mustWriteFile(t, filepath.Join(src, "subdir", "nested.txt"), []byte("nested"), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
 	result, err := eng.Plan(context.Background())
@@ -50,7 +64,7 @@ func TestPlan_Idempotent(t *testing.T) {
 	src := t.TempDir()
 	tgt := t.TempDir()
 
-	os.WriteFile(filepath.Join(src, "test.txt"), []byte("hello"), 0o644)
+	mustWriteFile(t, filepath.Join(src, "test.txt"), []byte("hello"), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
 	if _, err := eng.Apply(context.Background()); err != nil {
@@ -75,9 +89,9 @@ func TestPlan_SkipsDotfiles(t *testing.T) {
 	src := t.TempDir()
 	tgt := t.TempDir()
 
-	os.WriteFile(filepath.Join(src, ".hidden"), []byte("secret"), 0o644)
-	os.MkdirAll(filepath.Join(src, ".git"), 0o755)
-	os.WriteFile(filepath.Join(src, ".git", "config"), []byte("git"), 0o644)
+	mustWriteFile(t, filepath.Join(src, ".hidden"), []byte("secret"), 0o644)
+	mustMkdirAll(t, filepath.Join(src, ".git"), 0o755)
+	mustWriteFile(t, filepath.Join(src, ".git", "config"), []byte("git"), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
 	result, err := eng.Plan(context.Background())
@@ -95,8 +109,8 @@ func TestPlan_SkipsCrucibleYaml(t *testing.T) {
 	src := t.TempDir()
 	tgt := t.TempDir()
 
-	os.WriteFile(filepath.Join(src, "crucible.yaml"), []byte("config: true"), 0o644)
-	os.WriteFile(filepath.Join(src, "real.txt"), []byte("real"), 0o644)
+	mustWriteFile(t, filepath.Join(src, "crucible.yaml"), []byte("config: true"), 0o644)
+	mustWriteFile(t, filepath.Join(src, "real.txt"), []byte("real"), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
 	result, err := eng.Plan(context.Background())
@@ -116,14 +130,14 @@ func TestPlan_DetectsContentChange(t *testing.T) {
 	src := t.TempDir()
 	tgt := t.TempDir()
 
-	os.WriteFile(filepath.Join(src, "test.txt"), []byte("v1"), 0o644)
+	mustWriteFile(t, filepath.Join(src, "test.txt"), []byte("v1"), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
 	if _, err := eng.Apply(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
-	os.WriteFile(filepath.Join(src, "test.txt"), []byte("v2"), 0o644)
+	mustWriteFile(t, filepath.Join(src, "test.txt"), []byte("v2"), 0o644)
 
 	result, err := eng.Plan(context.Background())
 	if err != nil {
@@ -146,7 +160,7 @@ func TestApply_CreatesFiles(t *testing.T) {
 	src := t.TempDir()
 	tgt := t.TempDir()
 
-	os.WriteFile(filepath.Join(src, "test.txt"), []byte("hello"), 0o644)
+	mustWriteFile(t, filepath.Join(src, "test.txt"), []byte("hello"), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
 	if _, err := eng.Apply(context.Background()); err != nil {
@@ -169,7 +183,7 @@ func TestPlan_BackwardCompat(t *testing.T) {
 	src := t.TempDir()
 	tgt := t.TempDir()
 
-	os.WriteFile(filepath.Join(src, "config.txt"), []byte("value"), 0o644)
+	mustWriteFile(t, filepath.Join(src, "config.txt"), []byte("value"), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
 	result, err := eng.Plan(context.Background())
@@ -196,7 +210,7 @@ func TestPlan_Script(t *testing.T) {
 		c.file("~/.bashrc", { content: "# managed by crucible" });
 		c.dir("~/.config", { mode: 493 });
 	`
-	os.WriteFile(filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
+	mustWriteFile(t, filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
 	result, err := eng.Plan(context.Background())
@@ -232,7 +246,7 @@ func TestApply_Script(t *testing.T) {
 		var c = require("crucible");
 		c.file("~/.bashrc", { content: "# managed by crucible", mode: 420 });
 	`
-	os.WriteFile(filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
+	mustWriteFile(t, filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
 	if _, err := eng.Apply(context.Background()); err != nil {
@@ -254,14 +268,14 @@ func TestPlan_Script_SourceFile(t *testing.T) {
 	src := t.TempDir()
 	tgt := t.TempDir()
 
-	os.MkdirAll(filepath.Join(src, "fish"), 0o755)
-	os.WriteFile(filepath.Join(src, "fish", "config.fish"), []byte("set PATH /usr/local/bin"), 0o644)
+	mustMkdirAll(t, filepath.Join(src, "fish"), 0o755)
+	mustWriteFile(t, filepath.Join(src, "fish", "config.fish"), []byte("set PATH /usr/local/bin"), 0o644)
 
 	scriptContent := `
 		var c = require("crucible");
 		c.file("~/.config/fish/config.fish", { source: "fish/config.fish" });
 	`
-	os.WriteFile(filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
+	mustWriteFile(t, filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
 	if _, err := eng.Apply(context.Background()); err != nil {
@@ -288,7 +302,7 @@ func TestPlan_Script_Idempotent(t *testing.T) {
 		var c = require("crucible");
 		c.file("~/.bashrc", { content: "hello", mode: 420 });
 	`
-	os.WriteFile(filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
+	mustWriteFile(t, filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
 
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
 	if _, err := eng.Apply(context.Background()); err != nil {
