@@ -1,9 +1,15 @@
 [tools]
 go = "1.26.1"
+golangci-lint = "2.11.3"
 
 [tasks.build]
 description = "Build crucible binary to bin/crucible"
-run = "go build -o bin/crucible ./cmd/crucible"
+run = """
+VERSION=$(git describe --tags 2>/dev/null || echo "dev")
+COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+go build -ldflags "-s -w -X github.com/ryanwersal/crucible/internal/cli.version=$VERSION -X github.com/ryanwersal/crucible/internal/cli.commit=$COMMIT -X github.com/ryanwersal/crucible/internal/cli.date=$DATE" -o bin/crucible ./cmd/crucible
+"""
 
 [tasks.test]
 description = "Run all tests"
@@ -22,8 +28,8 @@ description = "Run go vet on all packages"
 run = "go vet ./..."
 
 [tasks.lint]
-description = "Run fmt-check and vet"
-depends = ["fmt-check", "vet"]
+description = "Run golangci-lint"
+run = "golangci-lint run ./..."
 
 [tasks.check]
 description = "Run all checks (lint + test)"

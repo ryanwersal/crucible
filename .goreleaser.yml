@@ -1,0 +1,44 @@
+version: 2
+
+builds:
+  - main: ./cmd/crucible
+    binary: crucible
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/ryanwersal/crucible/internal/cli.version={{.Version}}
+      - -X github.com/ryanwersal/crucible/internal/cli.commit={{.ShortCommit}}
+      - -X github.com/ryanwersal/crucible/internal/cli.date={{.Date}}
+
+archives:
+  - format: tar.gz
+    files:
+      - LICENSE
+
+brews:
+  - repository:
+      owner: ryanwersal
+      name: homebrew-tools
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    name: crucible
+    homepage: https://github.com/ryanwersal/crucible
+    description: A declarative dotfile and system configuration manager
+    license: GPL-3.0
+    custom_block: |
+      depends_on :macos
+    install: |
+      bin.install "crucible"
+    test: |
+      system bin/"crucible", "version"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
