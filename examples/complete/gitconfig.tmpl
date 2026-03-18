@@ -1,0 +1,13 @@
+[user]
+    email = {{ .email }}
+{{ if lookPath "nvim" -}}
+[core]
+    editor = nvim
+{{ else if lookPath "vim" -}}
+[core]
+    editor = vim
+{{ end -}}
+{{ if hasPrefix .os.name "dar" -}}
+[credential]
+    helper = osxkeychain
+{{ end -}}

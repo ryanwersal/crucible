@@ -107,7 +107,7 @@ func (r *Runtime) ResolveContent(ctx context.Context, store *fact.Store) error {
 	return nil
 }
 
-func (r *Runtime) resolveFileContent(_ context.Context, _ *fact.Store, decl *Declaration) error {
+func (r *Runtime) resolveFileContent(ctx context.Context, store *fact.Store, decl *Declaration) error {
 	// Source file reference: read file from source dir
 	if decl.SourceFile != "" {
 		path := filepath.Join(r.sourceDir, decl.SourceFile)
@@ -127,7 +127,11 @@ func (r *Runtime) resolveFileContent(_ context.Context, _ *fact.Store, decl *Dec
 			return fmt.Errorf("read template %s: %w", decl.TemplateFile, err)
 		}
 
-		rendered, err := renderTemplate(decl.TemplateFile, string(content), decl.TemplateData)
+		// Build template data: auto-injected facts as base, user data overrides
+		base := factsToTemplateData(ctx, r.logger, store)
+		data := mergeTemplateData(base, decl.TemplateData)
+
+		rendered, err := renderTemplate(decl.TemplateFile, string(content), data)
 		if err != nil {
 			return fmt.Errorf("render template %s: %w", decl.TemplateFile, err)
 		}
