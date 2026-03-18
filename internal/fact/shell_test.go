@@ -25,11 +25,9 @@ func TestShellCollector_Collect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if info.Path == "" {
-		t.Error("expected non-empty shell path")
-	}
-	// Shell path should start with /
-	if info.Path[0] != '/' {
+	// Path may be empty if dscl has no shell entry (e.g. CI runner accounts).
+	// When set, it must be an absolute path.
+	if info.Path != "" && info.Path[0] != '/' {
 		t.Errorf("shell path %q doesn't start with /", info.Path)
 	}
 }
@@ -47,7 +45,8 @@ func TestShellCollector_DefaultUsername(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if info.Path == "" {
-		t.Error("expected non-empty shell path")
+	// Path may be empty if dscl has no shell entry for the current user.
+	if info.Path != "" && info.Path[0] != '/' {
+		t.Errorf("shell path %q doesn't start with /", info.Path)
 	}
 }
