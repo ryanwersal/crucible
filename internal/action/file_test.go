@@ -63,9 +63,9 @@ func TestDiffFile(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "replace symlink",
-			desired: DesiredFile{Path: "/tmp/test.txt", Content: []byte("hello"), Mode: 0o644},
-			actual:  &fact.FileInfo{Exists: true, IsLink: true},
+			name:        "replace symlink",
+			desired:     DesiredFile{Path: "/tmp/test.txt", Content: []byte("hello"), Mode: 0o644},
+			actual:      &fact.FileInfo{Exists: true, IsLink: true},
 			wantActions: 2,
 			wantType:    DeletePath,
 		},

@@ -13,7 +13,7 @@ import (
 type DefaultsHandler struct{}
 
 func (DefaultsHandler) DeclType() decl.Type { return decl.Defaults }
-func (DefaultsHandler) DeclName() string     { return "Defaults" }
+func (DefaultsHandler) DeclName() string    { return "Defaults" }
 
 func (DefaultsHandler) Plan(ctx context.Context, store *fact.Store, env Env, d decl.Declaration) (PlanOutput, error) {
 	factKey := fmt.Sprintf("defaults:%s:%s", d.DefaultsDomain, d.DefaultsKey)

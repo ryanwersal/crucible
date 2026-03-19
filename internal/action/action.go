@@ -45,31 +45,31 @@ func (t Type) String() string {
 
 // Action is an inert description of a change to apply.
 type Action struct {
-	Type        Type
-	Path        string
-	Description string
-	Recursive   bool        // DeletePath: use os.RemoveAll instead of os.Remove
-	Content     []byte      // WriteFile
-	Mode        fs.FileMode // WriteFile, CreateDir, SetPermissions
-	LinkTarget  string      // CreateSymlink
-	PackageName       string      // InstallPackage
-	DefaultsDomain    string      // SetDefaults
-	DefaultsKey       string      // SetDefaults
-	DefaultsValue     any         // SetDefaults
-	DefaultsValueType string      // SetDefaults
-	DockApps          []string    // SetDock
+	Type              Type
+	Path              string
+	Description       string
+	Recursive         bool         // DeletePath: use os.RemoveAll instead of os.Remove
+	Content           []byte       // WriteFile
+	Mode              fs.FileMode  // WriteFile, CreateDir, SetPermissions
+	LinkTarget        string       // CreateSymlink
+	PackageName       string       // InstallPackage
+	DefaultsDomain    string       // SetDefaults
+	DefaultsKey       string       // SetDefaults
+	DefaultsValue     any          // SetDefaults
+	DefaultsValueType string       // SetDefaults
+	DockApps          []string     // SetDock
 	DockFolders       []DockFolder // SetDock
-	GitURL            string      // CloneRepo, PullRepo
-	GitBranch         string      // CloneRepo, PullRepo
-	FontSource        string      // InstallFont: source file path
-	FontDest          string      // InstallFont: destination file path
-	MiseToolName      string      // InstallMiseTool
-	MiseToolVersion   string      // InstallMiseTool
-	ShellPath         string      // SetShell
-	ShellUsername     string      // SetShell
-	MasAppID          int64       // InstallMasApp
-	MasAppName        string      // InstallMasApp
-	NeedsSudo         bool        // action requires privilege escalation
+	GitURL            string       // CloneRepo, PullRepo
+	GitBranch         string       // CloneRepo, PullRepo
+	FontSource        string       // InstallFont: source file path
+	FontDest          string       // InstallFont: destination file path
+	MiseToolName      string       // InstallMiseTool
+	MiseToolVersion   string       // InstallMiseTool
+	ShellPath         string       // SetShell
+	ShellUsername     string       // SetShell
+	MasAppID          int64        // InstallMasApp
+	MasAppName        string       // InstallMasApp
+	NeedsSudo         bool         // action requires privilege escalation
 }
 
 // AllTypes returns every registered action Type, sorted by ordinal.
@@ -78,7 +78,7 @@ func AllTypes() []Type {
 	for t := range typeNames {
 		types = append(types, t)
 	}
-	slices.SortFunc(types, func(a, b Type) int { return cmp.Compare(a, b) })
+	slices.SortFunc(types, cmp.Compare)
 	return types
 }
 

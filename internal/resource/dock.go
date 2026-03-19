@@ -12,7 +12,7 @@ import (
 type DockHandler struct{}
 
 func (DockHandler) DeclType() decl.Type { return decl.Dock }
-func (DockHandler) DeclName() string     { return "Dock" }
+func (DockHandler) DeclName() string    { return "Dock" }
 
 func (DockHandler) Plan(ctx context.Context, store *fact.Store, env Env, d decl.Declaration) (PlanOutput, error) {
 	dockFact, err := fact.Get(ctx, store, "dock", fact.DockCollector{HomeDir: env.TargetDir})

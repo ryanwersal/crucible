@@ -12,7 +12,7 @@ import (
 type DeletePathExecutor struct{}
 
 func (DeletePathExecutor) ActionType() action.Type { return action.DeletePath }
-func (DeletePathExecutor) ActionName() string        { return "DeletePath" }
+func (DeletePathExecutor) ActionName() string      { return "DeletePath" }
 
 func (DeletePathExecutor) Execute(_ context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	if a.Recursive {

@@ -14,7 +14,7 @@ import (
 type FontHandler struct{}
 
 func (FontHandler) DeclType() decl.Type { return decl.Font }
-func (FontHandler) DeclName() string     { return "Font" }
+func (FontHandler) DeclName() string    { return "Font" }
 
 func (FontHandler) PlanBatch(ctx context.Context, store *fact.Store, env Env, decls []decl.Declaration) (PlanOutput, error) {
 	// Build desired fonts from declarations.

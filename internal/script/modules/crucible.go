@@ -557,7 +557,7 @@ func (m *CrucibleModule) shell(call goja.FunctionCall) goja.Value {
 	*m.declarations = append(*m.declarations, decl.Declaration{
 		Type:          decl.Shell,
 		ShellPath:     shellPath,
-		ShellUsername:  username,
+		ShellUsername: username,
 	})
 
 	return goja.Undefined()

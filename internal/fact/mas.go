@@ -11,8 +11,8 @@ import (
 
 // MasInfo holds the observed state of Mac App Store apps.
 type MasInfo struct {
-	Available bool              // is `mas` on PATH?
-	Apps      map[int64]string  // ADAM ID → app name
+	Available bool             // is `mas` on PATH?
+	Apps      map[int64]string // ADAM ID → app name
 }
 
 // MasCollector collects installed Mac App Store apps.

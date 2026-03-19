@@ -47,32 +47,32 @@ func (t Type) String() string {
 
 // Declaration represents a single desired-state entry produced by a script.
 type Declaration struct {
-	Type         Type
-	State        State
-	Path         string         // target path (~ expanded)
-	Content      []byte         // File: inline content
-	SourceFile   string         // File: relative path in source dir
-	TemplateFile string         // File: relative path to .tmpl in source dir
-	TemplateData map[string]any // File: template variables
-	Mode         fs.FileMode    // File, Dir
-	LinkTarget     string         // Symlink
-	PackageName    string         // Package
-	DefaultsDomain string         // Defaults
-	DefaultsKey    string         // Defaults
-	DefaultsValue  any            // Defaults
-	DockApps       []string       // Dock
-	DockFolders    []DockFolder   // Dock
-	GitURL         string         // GitRepo
-	GitBranch      string         // GitRepo
-	FontSource     string         // Font: relative path to font file in source dir
-	FontName       string         // Font: filename (e.g. "Mono.ttf")
-	FontDestDir    string         // Font: destination directory
-	MiseToolName    string        // MiseTool
-	MiseToolVersion string        // MiseTool
-	ShellPath       string        // Shell
-	ShellUsername   string        // Shell
-	MasAppID        int64         // MasApp
-	MasAppName      string        // MasApp
+	Type            Type
+	State           State
+	Path            string         // target path (~ expanded)
+	Content         []byte         // File: inline content
+	SourceFile      string         // File: relative path in source dir
+	TemplateFile    string         // File: relative path to .tmpl in source dir
+	TemplateData    map[string]any // File: template variables
+	Mode            fs.FileMode    // File, Dir
+	LinkTarget      string         // Symlink
+	PackageName     string         // Package
+	DefaultsDomain  string         // Defaults
+	DefaultsKey     string         // Defaults
+	DefaultsValue   any            // Defaults
+	DockApps        []string       // Dock
+	DockFolders     []DockFolder   // Dock
+	GitURL          string         // GitRepo
+	GitBranch       string         // GitRepo
+	FontSource      string         // Font: relative path to font file in source dir
+	FontName        string         // Font: filename (e.g. "Mono.ttf")
+	FontDestDir     string         // Font: destination directory
+	MiseToolName    string         // MiseTool
+	MiseToolVersion string         // MiseTool
+	ShellPath       string         // Shell
+	ShellUsername   string         // Shell
+	MasAppID        int64          // MasApp
+	MasAppName      string         // MasApp
 }
 
 // AllTypes returns every registered declaration Type, sorted by ordinal.
@@ -81,7 +81,7 @@ func AllTypes() []Type {
 	for t := range typeNames {
 		types = append(types, t)
 	}
-	slices.SortFunc(types, func(a, b Type) int { return cmp.Compare(a, b) })
+	slices.SortFunc(types, cmp.Compare)
 	return types
 }
 

@@ -21,7 +21,7 @@ func DiffShell(desired DesiredShell, actual *fact.ShellInfo) []Action {
 	return []Action{{
 		Type:          SetShell,
 		ShellPath:     desired.Path,
-		ShellUsername:  desired.Username,
+		ShellUsername: desired.Username,
 		Description:   fmt.Sprintf("chsh -s %s %s", desired.Path, desired.Username),
 	}}
 }
