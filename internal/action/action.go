@@ -1,6 +1,11 @@
 package action
 
-import "io/fs"
+import (
+	"cmp"
+	"fmt"
+	"io/fs"
+	"slices"
+)
 
 // Type identifies the kind of action to perform.
 type Type int
@@ -25,45 +30,17 @@ const (
 	InstallMasApp
 )
 
+var typeNames = map[Type]string{}
+
+// RegisterName records the human-readable name for an action type.
+// Called by the resource registry during executor registration.
+func RegisterName(t Type, name string) { typeNames[t] = name }
+
 func (t Type) String() string {
-	switch t {
-	case WriteFile:
-		return "WriteFile"
-	case CreateDir:
-		return "CreateDir"
-	case CreateSymlink:
-		return "CreateSymlink"
-	case SetPermissions:
-		return "SetPermissions"
-	case DeletePath:
-		return "DeletePath"
-	case InstallPackage:
-		return "InstallPackage"
-	case SetDefaults:
-		return "SetDefaults"
-	case SetDock:
-		return "SetDock"
-	case CloneRepo:
-		return "CloneRepo"
-	case PullRepo:
-		return "PullRepo"
-	case InstallFont:
-		return "InstallFont"
-	case InstallMiseTool:
-		return "InstallMiseTool"
-	case SetShell:
-		return "SetShell"
-	case UninstallPackage:
-		return "UninstallPackage"
-	case UninstallMiseTool:
-		return "UninstallMiseTool"
-	case DeleteDefaults:
-		return "DeleteDefaults"
-	case InstallMasApp:
-		return "InstallMasApp"
-	default:
-		return "Unknown"
+	if name, ok := typeNames[t]; ok {
+		return name
 	}
+	return fmt.Sprintf("action(%d)", t)
 }
 
 // Action is an inert description of a change to apply.
@@ -95,15 +72,14 @@ type Action struct {
 	NeedsSudo         bool        // action requires privilege escalation
 }
 
-// AllTypes returns every declared action Type value.
+// AllTypes returns every registered action Type, sorted by ordinal.
 func AllTypes() []Type {
-	return []Type{
-		WriteFile, CreateDir, CreateSymlink, SetPermissions, DeletePath,
-		InstallPackage, SetDefaults, SetDock, CloneRepo, PullRepo,
-		InstallFont, InstallMiseTool, SetShell,
-		UninstallPackage, UninstallMiseTool, DeleteDefaults,
-		InstallMasApp,
+	types := make([]Type, 0, len(typeNames))
+	for t := range typeNames {
+		types = append(types, t)
 	}
+	slices.SortFunc(types, func(a, b Type) int { return cmp.Compare(a, b) })
+	return types
 }
 
 // DockFolder describes a folder entry in the Dock.

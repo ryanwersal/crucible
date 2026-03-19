@@ -13,6 +13,7 @@ import (
 type FileHandler struct{}
 
 func (FileHandler) DeclType() decl.Type { return decl.File }
+func (FileHandler) DeclName() string     { return "File" }
 
 func (FileHandler) Plan(ctx context.Context, store *fact.Store, env Env, d decl.Declaration) (PlanOutput, error) {
 	fileFact, err := fact.Get(ctx, store, "file:"+d.Path, fact.FileCollector{Path: d.Path})

@@ -13,6 +13,7 @@ import (
 type PackageHandler struct{}
 
 func (PackageHandler) DeclType() decl.Type { return decl.Package }
+func (PackageHandler) DeclName() string     { return "Package" }
 
 func (PackageHandler) PlanBatch(ctx context.Context, store *fact.Store, env Env, decls []decl.Declaration) (PlanOutput, error) {
 	packages := make([]action.DesiredPackage, len(decls))

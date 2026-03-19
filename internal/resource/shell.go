@@ -13,6 +13,7 @@ import (
 type ShellHandler struct{}
 
 func (ShellHandler) DeclType() decl.Type { return decl.Shell }
+func (ShellHandler) DeclName() string     { return "Shell" }
 
 func (ShellHandler) Plan(ctx context.Context, store *fact.Store, env Env, d decl.Declaration) (PlanOutput, error) {
 	shellFact, err := fact.Get(ctx, store, "shell:"+d.ShellUsername, fact.ShellCollector{Username: d.ShellUsername})

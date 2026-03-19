@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ryanwersal/crucible/internal/reference"
+	"github.com/ryanwersal/crucible/internal/resource"
 	"github.com/spf13/cobra"
 )
 
@@ -13,7 +14,7 @@ func newReferenceCmd() *cobra.Command {
 		Short: "Print comprehensive reference documentation",
 		Long:  "Dumps a structured plain-text reference of the full crucible API surface to stdout. Designed for LLM consumption.",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Print(reference.Build(cmd.Root()))
+			fmt.Print(reference.Build(cmd.Root(), resource.DefaultRegistry()))
 		},
 	}
 }

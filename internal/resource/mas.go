@@ -13,6 +13,7 @@ import (
 type MasHandler struct{}
 
 func (MasHandler) DeclType() decl.Type { return decl.MasApp }
+func (MasHandler) DeclName() string     { return "MasApp" }
 
 func (MasHandler) PlanBatch(ctx context.Context, store *fact.Store, env Env, decls []decl.Declaration) (PlanOutput, error) {
 	apps := make([]action.DesiredMasApp, len(decls))

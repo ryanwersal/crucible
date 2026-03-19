@@ -13,6 +13,7 @@ import (
 type MiseToolHandler struct{}
 
 func (MiseToolHandler) DeclType() decl.Type { return decl.MiseTool }
+func (MiseToolHandler) DeclName() string     { return "MiseTool" }
 
 func (MiseToolHandler) PlanBatch(ctx context.Context, store *fact.Store, env Env, decls []decl.Declaration) (PlanOutput, error) {
 	tools := make([]action.DesiredMiseTool, len(decls))

@@ -5,13 +5,15 @@ import (
 	"strings"
 
 	"github.com/ryanwersal/crucible/internal/action"
+	"github.com/ryanwersal/crucible/internal/resource"
 	"github.com/ryanwersal/crucible/internal/script"
 	"github.com/ryanwersal/crucible/internal/script/decl"
 	"github.com/spf13/cobra"
 )
 
 // Build assembles the complete reference documentation from the given root command.
-func Build(root *cobra.Command) string {
+// The registry must be provided so that type names and lists are populated.
+func Build(root *cobra.Command, reg *resource.Registry) string {
 	var b strings.Builder
 	writeOverview(&b)
 	writeCLICommands(&b, root)
@@ -19,8 +21,8 @@ func Build(root *cobra.Command) string {
 	writeFacts(&b)
 	writeTemplateFuncs(&b)
 	writeTemplateData(&b)
-	writeDeclTypes(&b)
-	writeActionTypes(&b)
+	writeDeclTypes(&b, reg)
+	writeActionTypes(&b, reg)
 	return b.String()
 }
 
@@ -315,11 +317,11 @@ var declTypeDescriptions = map[decl.Type]string{
 	decl.MasApp:   "Mac App Store app — installed via mas",
 }
 
-func writeDeclTypes(b *strings.Builder) {
+func writeDeclTypes(b *strings.Builder, reg *resource.Registry) {
 	b.WriteString("# Declaration Types\n\n")
 	b.WriteString("These are the internal declaration types produced by the JavaScript API:\n\n")
 
-	for _, t := range decl.AllTypes() {
+	for _, t := range reg.AllDeclTypes() {
 		desc, ok := declTypeDescriptions[t]
 		if !ok {
 			desc = t.String()
@@ -349,11 +351,11 @@ var actionTypeDescriptions = map[action.Type]string{
 	action.InstallMasApp:     "Install a Mac App Store app",
 }
 
-func writeActionTypes(b *strings.Builder) {
+func writeActionTypes(b *strings.Builder, reg *resource.Registry) {
 	b.WriteString("# Action Types\n\n")
 	b.WriteString("These are the internal action types that the engine executes:\n\n")
 
-	for _, t := range action.AllTypes() {
+	for _, t := range reg.AllActionTypes() {
 		desc, ok := actionTypeDescriptions[t]
 		if !ok {
 			desc = t.String()

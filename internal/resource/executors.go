@@ -31,6 +31,7 @@ func buildCmd(ctx context.Context, a action.Action, stdin io.Reader, stdout, std
 type WriteFileExecutor struct{}
 
 func (WriteFileExecutor) ActionType() action.Type { return action.WriteFile }
+func (WriteFileExecutor) ActionName() string        { return "WriteFile" }
 
 func (WriteFileExecutor) Execute(_ context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	dir := filepath.Dir(a.Path)
@@ -67,6 +68,7 @@ func (WriteFileExecutor) Execute(_ context.Context, a action.Action, _ io.Reader
 type CreateDirExecutor struct{}
 
 func (CreateDirExecutor) ActionType() action.Type { return action.CreateDir }
+func (CreateDirExecutor) ActionName() string        { return "CreateDir" }
 
 func (CreateDirExecutor) Execute(_ context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	return os.MkdirAll(a.Path, a.Mode)
@@ -76,6 +78,7 @@ func (CreateDirExecutor) Execute(_ context.Context, a action.Action, _ io.Reader
 type CreateSymlinkExecutor struct{}
 
 func (CreateSymlinkExecutor) ActionType() action.Type { return action.CreateSymlink }
+func (CreateSymlinkExecutor) ActionName() string        { return "CreateSymlink" }
 
 func (CreateSymlinkExecutor) Execute(_ context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	return os.Symlink(a.LinkTarget, a.Path)
@@ -85,6 +88,7 @@ func (CreateSymlinkExecutor) Execute(_ context.Context, a action.Action, _ io.Re
 type SetPermissionsExecutor struct{}
 
 func (SetPermissionsExecutor) ActionType() action.Type { return action.SetPermissions }
+func (SetPermissionsExecutor) ActionName() string        { return "SetPermissions" }
 
 func (SetPermissionsExecutor) Execute(_ context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	return os.Chmod(a.Path, a.Mode)
@@ -94,6 +98,7 @@ func (SetPermissionsExecutor) Execute(_ context.Context, a action.Action, _ io.R
 type InstallPackageExecutor struct{}
 
 func (InstallPackageExecutor) ActionType() action.Type { return action.InstallPackage }
+func (InstallPackageExecutor) ActionName() string        { return "InstallPackage" }
 
 func (InstallPackageExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
 	return buildCmd(ctx, a, stdin, stdout, stderr, "brew", "install", a.PackageName).Run()
@@ -103,6 +108,7 @@ func (InstallPackageExecutor) Execute(ctx context.Context, a action.Action, stdi
 type UninstallPackageExecutor struct{}
 
 func (UninstallPackageExecutor) ActionType() action.Type { return action.UninstallPackage }
+func (UninstallPackageExecutor) ActionName() string        { return "UninstallPackage" }
 
 func (UninstallPackageExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
 	return buildCmd(ctx, a, stdin, stdout, stderr, "brew", "uninstall", a.PackageName).Run()
@@ -112,6 +118,7 @@ func (UninstallPackageExecutor) Execute(ctx context.Context, a action.Action, st
 type SetDefaultsExecutor struct{}
 
 func (SetDefaultsExecutor) ActionType() action.Type { return action.SetDefaults }
+func (SetDefaultsExecutor) ActionName() string        { return "SetDefaults" }
 
 func (SetDefaultsExecutor) Execute(ctx context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	if a.DefaultsValueType == "" {
@@ -142,6 +149,7 @@ func (SetDefaultsExecutor) Execute(ctx context.Context, a action.Action, _ io.Re
 type DeleteDefaultsExecutor struct{}
 
 func (DeleteDefaultsExecutor) ActionType() action.Type { return action.DeleteDefaults }
+func (DeleteDefaultsExecutor) ActionName() string        { return "DeleteDefaults" }
 
 func (DeleteDefaultsExecutor) Execute(ctx context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	cmd := exec.CommandContext(ctx, "defaults", "delete", a.DefaultsDomain, a.DefaultsKey)
@@ -152,6 +160,7 @@ func (DeleteDefaultsExecutor) Execute(ctx context.Context, a action.Action, _ io
 type SetDockExecutor struct{}
 
 func (SetDockExecutor) ActionType() action.Type { return action.SetDock }
+func (SetDockExecutor) ActionName() string        { return "SetDock" }
 
 func (SetDockExecutor) Execute(ctx context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	homeDir, err := os.UserHomeDir()
@@ -179,6 +188,7 @@ func (SetDockExecutor) Execute(ctx context.Context, a action.Action, _ io.Reader
 type CloneRepoExecutor struct{}
 
 func (CloneRepoExecutor) ActionType() action.Type { return action.CloneRepo }
+func (CloneRepoExecutor) ActionName() string        { return "CloneRepo" }
 
 func (CloneRepoExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
 	args := []string{"clone"}
@@ -193,6 +203,7 @@ func (CloneRepoExecutor) Execute(ctx context.Context, a action.Action, stdin io.
 type PullRepoExecutor struct{}
 
 func (PullRepoExecutor) ActionType() action.Type { return action.PullRepo }
+func (PullRepoExecutor) ActionName() string        { return "PullRepo" }
 
 func (PullRepoExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
 	return buildCmd(ctx, a, stdin, stdout, stderr, "git", "-C", a.Path, "pull").Run()
@@ -202,6 +213,7 @@ func (PullRepoExecutor) Execute(ctx context.Context, a action.Action, stdin io.R
 type InstallFontExecutor struct{}
 
 func (InstallFontExecutor) ActionType() action.Type { return action.InstallFont }
+func (InstallFontExecutor) ActionName() string        { return "InstallFont" }
 
 func (InstallFontExecutor) Execute(_ context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	dir := filepath.Dir(a.FontDest)
@@ -225,6 +237,7 @@ func (InstallFontExecutor) Execute(_ context.Context, a action.Action, _ io.Read
 type InstallMiseToolExecutor struct{}
 
 func (InstallMiseToolExecutor) ActionType() action.Type { return action.InstallMiseTool }
+func (InstallMiseToolExecutor) ActionName() string        { return "InstallMiseTool" }
 
 func (InstallMiseToolExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
 	spec := a.MiseToolName + "@" + a.MiseToolVersion
@@ -235,6 +248,7 @@ func (InstallMiseToolExecutor) Execute(ctx context.Context, a action.Action, std
 type UninstallMiseToolExecutor struct{}
 
 func (UninstallMiseToolExecutor) ActionType() action.Type { return action.UninstallMiseTool }
+func (UninstallMiseToolExecutor) ActionName() string        { return "UninstallMiseTool" }
 
 func (UninstallMiseToolExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
 	return buildCmd(ctx, a, stdin, stdout, stderr, "mise", "uninstall", a.MiseToolName).Run()
@@ -244,6 +258,7 @@ func (UninstallMiseToolExecutor) Execute(ctx context.Context, a action.Action, s
 type SetShellExecutor struct{}
 
 func (SetShellExecutor) ActionType() action.Type { return action.SetShell }
+func (SetShellExecutor) ActionName() string        { return "SetShell" }
 
 func (SetShellExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, _, _ io.Writer) error {
 	if a.ShellPath == "" || a.ShellPath[0] != '/' {
@@ -264,6 +279,7 @@ func (SetShellExecutor) Execute(ctx context.Context, a action.Action, stdin io.R
 type InstallMasAppExecutor struct{}
 
 func (InstallMasAppExecutor) ActionType() action.Type { return action.InstallMasApp }
+func (InstallMasAppExecutor) ActionName() string        { return "InstallMasApp" }
 
 func (InstallMasAppExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
 	id := fmt.Sprintf("%d", a.MasAppID)

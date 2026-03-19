@@ -13,6 +13,7 @@ import (
 type SymlinkHandler struct{}
 
 func (SymlinkHandler) DeclType() decl.Type { return decl.Symlink }
+func (SymlinkHandler) DeclName() string     { return "Symlink" }
 
 func (SymlinkHandler) Plan(ctx context.Context, store *fact.Store, env Env, d decl.Declaration) (PlanOutput, error) {
 	symlinkFact, err := fact.Get(ctx, store, "symlink:"+d.Path, fact.SymlinkCollector{Path: d.Path})

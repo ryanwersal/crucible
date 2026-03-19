@@ -1,6 +1,11 @@
 package decl
 
-import "io/fs"
+import (
+	"cmp"
+	"fmt"
+	"io/fs"
+	"slices"
+)
 
 // State indicates whether a declaration should be present or absent.
 type State int
@@ -27,33 +32,17 @@ const (
 	MasApp
 )
 
-func (d Type) String() string {
-	switch d {
-	case File:
-		return "File"
-	case Dir:
-		return "Dir"
-	case Symlink:
-		return "Symlink"
-	case Package:
-		return "Package"
-	case Defaults:
-		return "Defaults"
-	case Dock:
-		return "Dock"
-	case GitRepo:
-		return "GitRepo"
-	case Font:
-		return "Font"
-	case MiseTool:
-		return "MiseTool"
-	case Shell:
-		return "Shell"
-	case MasApp:
-		return "MasApp"
-	default:
-		return "Unknown"
+var typeNames = map[Type]string{}
+
+// RegisterName records the human-readable name for a declaration type.
+// Called by the resource registry during handler registration.
+func RegisterName(t Type, name string) { typeNames[t] = name }
+
+func (t Type) String() string {
+	if name, ok := typeNames[t]; ok {
+		return name
 	}
+	return fmt.Sprintf("decl(%d)", t)
 }
 
 // Declaration represents a single desired-state entry produced by a script.
@@ -86,9 +75,14 @@ type Declaration struct {
 	MasAppName      string        // MasApp
 }
 
-// AllTypes returns every declared Type value.
+// AllTypes returns every registered declaration Type, sorted by ordinal.
 func AllTypes() []Type {
-	return []Type{File, Dir, Symlink, Package, Defaults, Dock, GitRepo, Font, MiseTool, Shell, MasApp}
+	types := make([]Type, 0, len(typeNames))
+	for t := range typeNames {
+		types = append(types, t)
+	}
+	slices.SortFunc(types, func(a, b Type) int { return cmp.Compare(a, b) })
+	return types
 }
 
 // DockFolder describes a folder entry in the Dock declaration.

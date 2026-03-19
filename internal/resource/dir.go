@@ -13,6 +13,7 @@ import (
 type DirHandler struct{}
 
 func (DirHandler) DeclType() decl.Type { return decl.Dir }
+func (DirHandler) DeclName() string     { return "Dir" }
 
 func (DirHandler) Plan(ctx context.Context, store *fact.Store, env Env, d decl.Declaration) (PlanOutput, error) {
 	dirFact, err := fact.Get(ctx, store, "dir:"+d.Path, fact.DirCollector{Path: d.Path})

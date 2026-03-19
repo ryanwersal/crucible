@@ -3,10 +3,9 @@ package reference_test
 import (
 	"testing"
 
-	"github.com/ryanwersal/crucible/internal/action"
 	"github.com/ryanwersal/crucible/internal/reference"
+	"github.com/ryanwersal/crucible/internal/resource"
 	"github.com/ryanwersal/crucible/internal/script"
-	"github.com/ryanwersal/crucible/internal/script/decl"
 	"github.com/spf13/cobra"
 )
 
@@ -19,8 +18,13 @@ func buildTestRoot() *cobra.Command {
 }
 
 func TestBuildContainsAllDeclTypes(t *testing.T) {
-	output := reference.Build(buildTestRoot())
-	for _, dt := range decl.AllTypes() {
+	reg := resource.DefaultRegistry()
+	declTypes := reg.AllDeclTypes()
+	if len(declTypes) == 0 {
+		t.Fatal("no decl types registered")
+	}
+	output := reference.Build(buildTestRoot(), reg)
+	for _, dt := range declTypes {
 		name := dt.String()
 		if !containsString(output, name) {
 			t.Errorf("declaration type %q not found in reference output", name)
@@ -29,8 +33,13 @@ func TestBuildContainsAllDeclTypes(t *testing.T) {
 }
 
 func TestBuildContainsAllActionTypes(t *testing.T) {
-	output := reference.Build(buildTestRoot())
-	for _, at := range action.AllTypes() {
+	reg := resource.DefaultRegistry()
+	actionTypes := reg.AllActionTypes()
+	if len(actionTypes) == 0 {
+		t.Fatal("no action types registered")
+	}
+	output := reference.Build(buildTestRoot(), reg)
+	for _, at := range actionTypes {
 		name := at.String()
 		if !containsString(output, name) {
 			t.Errorf("action type %q not found in reference output", name)
@@ -39,7 +48,8 @@ func TestBuildContainsAllActionTypes(t *testing.T) {
 }
 
 func TestBuildContainsAllTemplateFuncs(t *testing.T) {
-	output := reference.Build(buildTestRoot())
+	reg := resource.DefaultRegistry()
+	output := reference.Build(buildTestRoot(), reg)
 	for _, name := range script.TemplateFuncNames() {
 		if !containsString(output, name) {
 			t.Errorf("template function %q not found in reference output", name)
@@ -48,7 +58,8 @@ func TestBuildContainsAllTemplateFuncs(t *testing.T) {
 }
 
 func TestBuildContainsAllJSAPIFunctions(t *testing.T) {
-	output := reference.Build(buildTestRoot())
+	reg := resource.DefaultRegistry()
+	output := reference.Build(buildTestRoot(), reg)
 	jsFuncs := []string{
 		"file", "dir", "symlink", "brew", "defaults", "dock",
 		"git", "font", "mas", "mise", "shell", "log",
@@ -62,7 +73,8 @@ func TestBuildContainsAllJSAPIFunctions(t *testing.T) {
 }
 
 func TestBuildContainsCLICommands(t *testing.T) {
-	output := reference.Build(buildTestRoot())
+	reg := resource.DefaultRegistry()
+	output := reference.Build(buildTestRoot(), reg)
 	for _, name := range []string{"apply", "reference", "version"} {
 		if !containsString(output, name) {
 			t.Errorf("CLI command %q not found in reference output", name)

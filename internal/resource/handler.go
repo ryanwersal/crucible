@@ -24,17 +24,20 @@ type PlanOutput struct {
 // Handler diffs a single declaration against collected facts.
 type Handler interface {
 	DeclType() decl.Type
+	DeclName() string
 	Plan(ctx context.Context, store *fact.Store, env Env, d decl.Declaration) (PlanOutput, error)
 }
 
 // BatchHandler accumulates all declarations of its type, then diffs them together.
 type BatchHandler interface {
 	DeclType() decl.Type
+	DeclName() string
 	PlanBatch(ctx context.Context, store *fact.Store, env Env, decls []decl.Declaration) (PlanOutput, error)
 }
 
 // ActionExecutor applies a single action type.
 type ActionExecutor interface {
 	ActionType() action.Type
+	ActionName() string
 	Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/ryanwersal/crucible/internal/action"
 	"github.com/ryanwersal/crucible/internal/fact"
@@ -29,16 +30,19 @@ func NewRegistry() *Registry {
 // RegisterHandler registers a per-declaration handler.
 func (r *Registry) RegisterHandler(h Handler) {
 	r.handlers[h.DeclType()] = h
+	decl.RegisterName(h.DeclType(), h.DeclName())
 }
 
 // RegisterBatchHandler registers a batch handler.
 func (r *Registry) RegisterBatchHandler(b BatchHandler) {
 	r.batchers[b.DeclType()] = b
+	decl.RegisterName(b.DeclType(), b.DeclName())
 }
 
 // RegisterExecutor registers an action executor.
 func (r *Registry) RegisterExecutor(e ActionExecutor) {
 	r.executors[e.ActionType()] = e
+	action.RegisterName(e.ActionType(), e.ActionName())
 }
 
 // IsBatched reports whether the given declaration type uses batch planning.
@@ -74,26 +78,53 @@ func (r *Registry) Execute(ctx context.Context, a action.Action, stdin io.Reader
 	return e.Execute(ctx, a, stdin, stdout, stderr)
 }
 
-// Validate checks that every known declaration and action type has a
-// registered handler/executor. Returns an error listing any gaps.
+// Validate checks internal consistency of the registry. It verifies that:
+//   - every registered decl type has exactly one handler (not both handler and batcher)
+//   - every registered action type has a name (guaranteed by construction, but defensive)
+//   - every registered decl type has a name (same)
 func (r *Registry) Validate() error {
 	var missing []string
-	for _, t := range decl.AllTypes() {
-		if _, ok := r.handlers[t]; !ok {
-			if _, ok := r.batchers[t]; !ok {
-				missing = append(missing, fmt.Sprintf("decl type %v has no handler or batch handler", t))
-			}
+
+	// Check for decl types registered as both handler and batcher.
+	for t := range r.handlers {
+		if _, ok := r.batchers[t]; ok {
+			missing = append(missing, fmt.Sprintf("decl type %v registered as both handler and batch handler", t))
 		}
 	}
-	for _, t := range action.AllTypes() {
-		if _, ok := r.executors[t]; !ok {
-			missing = append(missing, fmt.Sprintf("action type %v has no executor", t))
+
+	// Verify every registered executor's action type has a name.
+	for t := range r.executors {
+		if t.String() == fmt.Sprintf("action(%d)", t) {
+			missing = append(missing, fmt.Sprintf("action type %d has no registered name", t))
 		}
 	}
+
+	// Verify every registered handler's decl type has a name.
+	for t := range r.handlers {
+		if t.String() == fmt.Sprintf("decl(%d)", t) {
+			missing = append(missing, fmt.Sprintf("decl type %d has no registered name", t))
+		}
+	}
+	for t := range r.batchers {
+		if t.String() == fmt.Sprintf("decl(%d)", t) {
+			missing = append(missing, fmt.Sprintf("decl type %d has no registered name", t))
+		}
+	}
+
 	if len(missing) > 0 {
 		return fmt.Errorf("registry validation failed:\n  %s", joinLines(missing))
 	}
 	return nil
+}
+
+// AllActionTypes returns every action type registered in the registry.
+func (r *Registry) AllActionTypes() []action.Type {
+	return action.AllTypes()
+}
+
+// AllDeclTypes returns every declaration type registered in the registry.
+func (r *Registry) AllDeclTypes() []decl.Type {
+	return decl.AllTypes()
 }
 
 // DefaultRegistry returns a registry with all built-in handlers and executors.
@@ -138,9 +169,11 @@ func DefaultRegistry() *Registry {
 }
 
 func joinLines(ss []string) string {
-	result := ss[0]
+	var b strings.Builder
+	b.WriteString(ss[0])
 	for _, s := range ss[1:] {
-		result += "\n  " + s
+		b.WriteString("\n  ")
+		b.WriteString(s)
 	}
-	return result
+	return b.String()
 }

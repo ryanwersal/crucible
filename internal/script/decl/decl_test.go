@@ -5,6 +5,12 @@ import "testing"
 func TestType_String(t *testing.T) {
 	t.Parallel()
 
+	// Register names as the registry would.
+	RegisterName(File, "File")
+	RegisterName(Dir, "Dir")
+	RegisterName(Symlink, "Symlink")
+	RegisterName(Package, "Package")
+
 	tests := []struct {
 		dt   Type
 		want string
@@ -13,7 +19,7 @@ func TestType_String(t *testing.T) {
 		{Dir, "Dir"},
 		{Symlink, "Symlink"},
 		{Package, "Package"},
-		{Type(99), "Unknown"},
+		{Type(99), "decl(99)"},
 	}
 
 	for _, tt := range tests {

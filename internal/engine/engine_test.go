@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/ryanwersal/crucible/internal/action"
 )
 
 func mustWriteFile(t *testing.T, path string, data []byte, perm os.FileMode) {
@@ -44,10 +46,10 @@ func TestPlan_NewFiles(t *testing.T) {
 	hasWrite := false
 	hasDir := false
 	for _, a := range result.Actions {
-		switch a.Type.String() {
-		case "WriteFile":
+		switch a.Type {
+		case action.WriteFile:
 			hasWrite = true
-		case "CreateDir":
+		case action.CreateDir:
 			hasDir = true
 		}
 	}
@@ -146,7 +148,7 @@ func TestPlan_DetectsContentChange(t *testing.T) {
 
 	hasWrite := false
 	for _, a := range result.Actions {
-		if a.Type.String() == "WriteFile" {
+		if a.Type == action.WriteFile {
 			hasWrite = true
 		}
 	}
@@ -194,8 +196,8 @@ func TestPlan_BackwardCompat(t *testing.T) {
 	if len(result.Actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(result.Actions))
 	}
-	if result.Actions[0].Type.String() != "WriteFile" {
-		t.Errorf("expected WriteFile, got %s", result.Actions[0].Type.String())
+	if result.Actions[0].Type != action.WriteFile {
+		t.Errorf("expected WriteFile, got %s", result.Actions[0].Type)
 	}
 }
 
@@ -221,10 +223,10 @@ func TestPlan_Script(t *testing.T) {
 	hasWrite := false
 	hasDir := false
 	for _, a := range result.Actions {
-		switch a.Type.String() {
-		case "WriteFile":
+		switch a.Type {
+		case action.WriteFile:
 			hasWrite = true
-		case "CreateDir":
+		case action.CreateDir:
 			hasDir = true
 		}
 	}
