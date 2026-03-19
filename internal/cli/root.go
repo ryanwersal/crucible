@@ -31,9 +31,13 @@ func NewRootCmd() *cobra.Command {
 // Separated from NewRootCmd so tests can inject source/target.
 func buildRootCmd(opts *rootOpts) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "crucible",
-		Short:        "A declarative dotfile and system configuration manager",
-		Long:         "Crucible manages your dotfiles and system configuration declaratively. Use --dry-run to preview changes.",
+		Use:   "crucible",
+		Short: "A declarative dotfile and system configuration manager",
+		Long: `Crucible manages your dotfiles and system configuration declaratively.
+
+Crucible expects to be run from a directory containing a crucible.js script
+that declares desired system state. Use --dry-run to preview changes before
+applying them.`,
 		SilenceUsage: true,
 	}
 

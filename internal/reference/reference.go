@@ -30,7 +30,10 @@ func writeOverview(b *strings.Builder) {
 	b.WriteString("# Crucible Reference\n\n")
 	b.WriteString("Crucible is a declarative dotfile and system configuration manager. ")
 	b.WriteString("You write JavaScript configuration scripts that declare desired state, ")
-	b.WriteString("and crucible converges your system to match. ")
+	b.WriteString("and crucible converges your system to match.\n\n")
+	b.WriteString("Crucible looks for a crucible.js script in the current working directory. ")
+	b.WriteString("Run crucible from the directory containing your crucible.js, or use ")
+	b.WriteString("`--file` to specify a script elsewhere.\n\n")
 	b.WriteString("Run `crucible apply` to apply changes, or `crucible apply --dry-run` to preview them.\n\n")
 }
 

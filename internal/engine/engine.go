@@ -24,13 +24,14 @@ import (
 
 // Engine implements the two-phase plan/apply pipeline.
 type Engine struct {
-	sourceDir string
-	targetDir string
-	logger    *slog.Logger
-	stdin     io.Reader
-	stdout    io.Writer
-	stderr    io.Writer
-	registry  *resource.Registry
+	sourceDir  string
+	targetDir  string
+	scriptFile string // optional explicit script path; overrides crucible.js discovery
+	logger     *slog.Logger
+	stdin      io.Reader
+	stdout     io.Writer
+	stderr     io.Writer
+	registry   *resource.Registry
 }
 
 // New creates an Engine that maps sourceDir files onto targetDir.
@@ -57,11 +58,25 @@ func (e *Engine) SetOutput(stdout, stderr io.Writer) {
 	e.stderr = stderr
 }
 
+// SetScriptFile overrides the default crucible.js entry point discovery
+// with an explicit script file path.
+func (e *Engine) SetScriptFile(path string) {
+	e.scriptFile = path
+}
+
 // Plan walks the source directory, collects facts about corresponding target
 // paths, and returns the full result of comparing desired vs actual state.
 // If a crucible.js entry point exists, script-driven planning is used instead.
 func (e *Engine) Plan(ctx context.Context) (action.PlanResult, error) {
 	store := fact.NewStore()
+
+	if e.scriptFile != "" {
+		content, err := os.ReadFile(e.scriptFile)
+		if err != nil {
+			return action.PlanResult{}, fmt.Errorf("read script %s: %w", e.scriptFile, err)
+		}
+		return e.planScript(ctx, store, content)
+	}
 
 	loader := script.NewLoader(e.sourceDir)
 	_, content, err := loader.EntryPoint()
