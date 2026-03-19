@@ -89,6 +89,16 @@ type Action struct {
 	ShellUsername     string      // SetShell
 }
 
+// AllTypes returns every declared action Type value.
+func AllTypes() []Type {
+	return []Type{
+		WriteFile, CreateDir, CreateSymlink, SetPermissions, DeletePath,
+		InstallPackage, SetDefaults, SetDock, CloneRepo, PullRepo,
+		InstallFont, InstallMiseTool, SetShell,
+		UninstallPackage, UninstallMiseTool, DeleteDefaults,
+	}
+}
+
 // DockFolder describes a folder entry in the Dock.
 type DockFolder struct {
 	Path    string

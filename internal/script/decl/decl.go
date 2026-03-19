@@ -81,6 +81,11 @@ type Declaration struct {
 	ShellUsername   string        // Shell
 }
 
+// AllTypes returns every declared Type value.
+func AllTypes() []Type {
+	return []Type{File, Dir, Symlink, Package, Defaults, Dock, GitRepo, Font, MiseTool, Shell}
+}
+
 // DockFolder describes a folder entry in the Dock declaration.
 type DockFolder struct {
 	Path    string
