@@ -8,7 +8,9 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"golang.org/x/sync/errgroup"
@@ -25,6 +27,7 @@ type Engine struct {
 	sourceDir string
 	targetDir string
 	logger    *slog.Logger
+	stdin     io.Reader
 	stdout    io.Writer
 	stderr    io.Writer
 	registry  *resource.Registry
@@ -36,10 +39,16 @@ func New(sourceDir, targetDir string, logger *slog.Logger) *Engine {
 		sourceDir: sourceDir,
 		targetDir: targetDir,
 		logger:    logger,
+		stdin:     os.Stdin,
 		stdout:    os.Stdout,
 		stderr:    os.Stderr,
 		registry:  resource.DefaultRegistry(),
 	}
+}
+
+// SetInput configures the reader used for subprocess stdin during Apply.
+func (e *Engine) SetInput(stdin io.Reader) {
+	e.stdin = stdin
 }
 
 // SetOutput configures the writers used for subprocess output during Apply.
@@ -175,7 +184,7 @@ func (e *Engine) planWalk(ctx context.Context, store *fact.Store) (action.PlanRe
 func (e *Engine) planScript(ctx context.Context, store *fact.Store, scriptContent []byte) (action.PlanResult, error) {
 	// Pre-collect expensive facts concurrently
 	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(2)
+	g.SetLimit(3)
 
 	g.Go(func() error {
 		_, err := fact.Get(gctx, store, "os", fact.OSCollector{})
@@ -183,6 +192,10 @@ func (e *Engine) planScript(ctx context.Context, store *fact.Store, scriptConten
 	})
 	g.Go(func() error {
 		_, err := fact.Get(gctx, store, "homebrew", fact.HomebrewCollector{})
+		return err
+	})
+	g.Go(func() error {
+		_, err := fact.Get(gctx, store, "mas", fact.MasCollector{})
 		return err
 	})
 
@@ -245,12 +258,31 @@ func (e *Engine) Apply(ctx context.Context) (action.PlanResult, error) {
 		return action.PlanResult{}, err
 	}
 
+	// Pre-acquire sudo credentials if any action needs privilege escalation.
+	if needsSudo(result.Actions) {
+		e.logger.Info("pre-acquiring sudo credentials")
+		cmd := exec.CommandContext(ctx, "sudo", "-v")
+		cmd.Stdin = e.stdin
+		cmd.Stdout = e.stdout
+		cmd.Stderr = e.stderr
+		if err := cmd.Run(); err != nil {
+			return action.PlanResult{}, fmt.Errorf("sudo credential acquisition failed: %w", err)
+		}
+	}
+
 	for i, a := range result.Actions {
 		e.logger.Info("executing", "action", a.Type.String(), "description", a.Description)
-		if err := e.registry.Execute(ctx, a, e.stdout, e.stderr); err != nil {
+		if err := e.registry.Execute(ctx, a, e.stdin, e.stdout, e.stderr); err != nil {
 			return action.PlanResult{}, fmt.Errorf("action %d/%d failed (%s): %w", i+1, len(result.Actions), a.Description, err)
 		}
 	}
 
 	return result, nil
+}
+
+// needsSudo reports whether any action requires privilege escalation.
+func needsSudo(actions []action.Action) bool {
+	return slices.ContainsFunc(actions, func(a action.Action) bool {
+		return a.NeedsSudo
+	})
 }

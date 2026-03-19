@@ -12,12 +12,27 @@ import (
 	"github.com/ryanwersal/crucible/internal/action/dock"
 )
 
+// buildCmd creates an exec.Cmd, prepending sudo when a.NeedsSudo is true.
+func buildCmd(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer, name string, args ...string) *exec.Cmd {
+	if a.NeedsSudo {
+		args = append([]string{name}, args...)
+		name = "sudo"
+	}
+	cmd := exec.CommandContext(ctx, name, args...)
+	if a.NeedsSudo && stdin != nil {
+		cmd.Stdin = stdin
+	}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	return cmd
+}
+
 // WriteFileExecutor writes file content atomically.
 type WriteFileExecutor struct{}
 
 func (WriteFileExecutor) ActionType() action.Type { return action.WriteFile }
 
-func (WriteFileExecutor) Execute(_ context.Context, a action.Action, _, _ io.Writer) error {
+func (WriteFileExecutor) Execute(_ context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	dir := filepath.Dir(a.Path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("ensure parent dir: %w", err)
@@ -53,7 +68,7 @@ type CreateDirExecutor struct{}
 
 func (CreateDirExecutor) ActionType() action.Type { return action.CreateDir }
 
-func (CreateDirExecutor) Execute(_ context.Context, a action.Action, _, _ io.Writer) error {
+func (CreateDirExecutor) Execute(_ context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	return os.MkdirAll(a.Path, a.Mode)
 }
 
@@ -62,7 +77,7 @@ type CreateSymlinkExecutor struct{}
 
 func (CreateSymlinkExecutor) ActionType() action.Type { return action.CreateSymlink }
 
-func (CreateSymlinkExecutor) Execute(_ context.Context, a action.Action, _, _ io.Writer) error {
+func (CreateSymlinkExecutor) Execute(_ context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	return os.Symlink(a.LinkTarget, a.Path)
 }
 
@@ -71,7 +86,7 @@ type SetPermissionsExecutor struct{}
 
 func (SetPermissionsExecutor) ActionType() action.Type { return action.SetPermissions }
 
-func (SetPermissionsExecutor) Execute(_ context.Context, a action.Action, _, _ io.Writer) error {
+func (SetPermissionsExecutor) Execute(_ context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	return os.Chmod(a.Path, a.Mode)
 }
 
@@ -80,11 +95,8 @@ type InstallPackageExecutor struct{}
 
 func (InstallPackageExecutor) ActionType() action.Type { return action.InstallPackage }
 
-func (InstallPackageExecutor) Execute(ctx context.Context, a action.Action, stdout, stderr io.Writer) error {
-	cmd := exec.CommandContext(ctx, "brew", "install", a.PackageName)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	return cmd.Run()
+func (InstallPackageExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
+	return buildCmd(ctx, a, stdin, stdout, stderr, "brew", "install", a.PackageName).Run()
 }
 
 // UninstallPackageExecutor removes a Homebrew package.
@@ -92,11 +104,8 @@ type UninstallPackageExecutor struct{}
 
 func (UninstallPackageExecutor) ActionType() action.Type { return action.UninstallPackage }
 
-func (UninstallPackageExecutor) Execute(ctx context.Context, a action.Action, stdout, stderr io.Writer) error {
-	cmd := exec.CommandContext(ctx, "brew", "uninstall", a.PackageName)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	return cmd.Run()
+func (UninstallPackageExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
+	return buildCmd(ctx, a, stdin, stdout, stderr, "brew", "uninstall", a.PackageName).Run()
 }
 
 // SetDefaultsExecutor writes a macOS defaults value.
@@ -104,7 +113,7 @@ type SetDefaultsExecutor struct{}
 
 func (SetDefaultsExecutor) ActionType() action.Type { return action.SetDefaults }
 
-func (SetDefaultsExecutor) Execute(ctx context.Context, a action.Action, _, _ io.Writer) error {
+func (SetDefaultsExecutor) Execute(ctx context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	if a.DefaultsValueType == "" {
 		return fmt.Errorf("defaults value type not set for %s %s", a.DefaultsDomain, a.DefaultsKey)
 	}
@@ -134,7 +143,7 @@ type DeleteDefaultsExecutor struct{}
 
 func (DeleteDefaultsExecutor) ActionType() action.Type { return action.DeleteDefaults }
 
-func (DeleteDefaultsExecutor) Execute(ctx context.Context, a action.Action, _, _ io.Writer) error {
+func (DeleteDefaultsExecutor) Execute(ctx context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	cmd := exec.CommandContext(ctx, "defaults", "delete", a.DefaultsDomain, a.DefaultsKey)
 	return cmd.Run()
 }
@@ -144,7 +153,7 @@ type SetDockExecutor struct{}
 
 func (SetDockExecutor) ActionType() action.Type { return action.SetDock }
 
-func (SetDockExecutor) Execute(ctx context.Context, a action.Action, _, _ io.Writer) error {
+func (SetDockExecutor) Execute(ctx context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("get home dir: %w", err)
@@ -171,16 +180,13 @@ type CloneRepoExecutor struct{}
 
 func (CloneRepoExecutor) ActionType() action.Type { return action.CloneRepo }
 
-func (CloneRepoExecutor) Execute(ctx context.Context, a action.Action, stdout, stderr io.Writer) error {
+func (CloneRepoExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
 	args := []string{"clone"}
 	if a.GitBranch != "" {
 		args = append(args, "--branch", a.GitBranch)
 	}
 	args = append(args, a.GitURL, a.Path)
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	return cmd.Run()
+	return buildCmd(ctx, a, stdin, stdout, stderr, "git", args...).Run()
 }
 
 // PullRepoExecutor pulls updates in a git repository.
@@ -188,11 +194,8 @@ type PullRepoExecutor struct{}
 
 func (PullRepoExecutor) ActionType() action.Type { return action.PullRepo }
 
-func (PullRepoExecutor) Execute(ctx context.Context, a action.Action, stdout, stderr io.Writer) error {
-	cmd := exec.CommandContext(ctx, "git", "-C", a.Path, "pull")
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	return cmd.Run()
+func (PullRepoExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
+	return buildCmd(ctx, a, stdin, stdout, stderr, "git", "-C", a.Path, "pull").Run()
 }
 
 // InstallFontExecutor copies a font file to its destination.
@@ -200,7 +203,7 @@ type InstallFontExecutor struct{}
 
 func (InstallFontExecutor) ActionType() action.Type { return action.InstallFont }
 
-func (InstallFontExecutor) Execute(_ context.Context, a action.Action, _, _ io.Writer) error {
+func (InstallFontExecutor) Execute(_ context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	dir := filepath.Dir(a.FontDest)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("ensure font dir: %w", err)
@@ -223,12 +226,9 @@ type InstallMiseToolExecutor struct{}
 
 func (InstallMiseToolExecutor) ActionType() action.Type { return action.InstallMiseTool }
 
-func (InstallMiseToolExecutor) Execute(ctx context.Context, a action.Action, stdout, stderr io.Writer) error {
+func (InstallMiseToolExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
 	spec := a.MiseToolName + "@" + a.MiseToolVersion
-	cmd := exec.CommandContext(ctx, "mise", "use", "--global", spec)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	return cmd.Run()
+	return buildCmd(ctx, a, stdin, stdout, stderr, "mise", "use", "--global", spec).Run()
 }
 
 // UninstallMiseToolExecutor removes a mise tool.
@@ -236,11 +236,8 @@ type UninstallMiseToolExecutor struct{}
 
 func (UninstallMiseToolExecutor) ActionType() action.Type { return action.UninstallMiseTool }
 
-func (UninstallMiseToolExecutor) Execute(ctx context.Context, a action.Action, stdout, stderr io.Writer) error {
-	cmd := exec.CommandContext(ctx, "mise", "uninstall", a.MiseToolName)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	return cmd.Run()
+func (UninstallMiseToolExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
+	return buildCmd(ctx, a, stdin, stdout, stderr, "mise", "uninstall", a.MiseToolName).Run()
 }
 
 // SetShellExecutor changes the user's login shell.
@@ -248,7 +245,7 @@ type SetShellExecutor struct{}
 
 func (SetShellExecutor) ActionType() action.Type { return action.SetShell }
 
-func (SetShellExecutor) Execute(ctx context.Context, a action.Action, _, _ io.Writer) error {
+func (SetShellExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, _, _ io.Writer) error {
 	if a.ShellPath == "" || a.ShellPath[0] != '/' {
 		return fmt.Errorf("shell path must be an absolute path, got %q", a.ShellPath)
 	}
@@ -259,5 +256,16 @@ func (SetShellExecutor) Execute(ctx context.Context, a action.Action, _, _ io.Wr
 	}
 
 	cmd := exec.CommandContext(ctx, "chsh", args...)
+	cmd.Stdin = stdin
 	return cmd.Run()
+}
+
+// InstallMasAppExecutor installs a Mac App Store app via mas.
+type InstallMasAppExecutor struct{}
+
+func (InstallMasAppExecutor) ActionType() action.Type { return action.InstallMasApp }
+
+func (InstallMasAppExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
+	id := fmt.Sprintf("%d", a.MasAppID)
+	return buildCmd(ctx, a, stdin, stdout, stderr, "mas", "install", id).Run()
 }

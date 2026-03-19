@@ -1,7 +1,7 @@
 ---
 name: audit
 description: Comprehensive code review audit for Go changes — analyzes code quality, concurrency correctness, performance, security, and adherence to project standards. Fixes issues directly when possible.
-disable-model-invocation: true
+disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Grep, Glob, Bash, Edit, Write
 context: fork

@@ -60,6 +60,10 @@ func printResult(w io.Writer, result action.PlanResult) {
 		_, _ = fmt.Fprintf(w, "  ✓ %s\n", o.Description)
 	}
 	for _, a := range result.Actions {
-		_, _ = fmt.Fprintf(w, "  → %s\n", a.Description)
+		if a.NeedsSudo {
+			_, _ = fmt.Fprintf(w, "  → [sudo] %s\n", a.Description)
+		} else {
+			_, _ = fmt.Fprintf(w, "  → %s\n", a.Description)
+		}
 	}
 }

@@ -13,7 +13,7 @@ type DeletePathExecutor struct{}
 
 func (DeletePathExecutor) ActionType() action.Type { return action.DeletePath }
 
-func (DeletePathExecutor) Execute(_ context.Context, a action.Action, _, _ io.Writer) error {
+func (DeletePathExecutor) Execute(_ context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
 	if a.Recursive {
 		return os.RemoveAll(a.Path)
 	}

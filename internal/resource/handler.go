@@ -36,5 +36,5 @@ type BatchHandler interface {
 // ActionExecutor applies a single action type.
 type ActionExecutor interface {
 	ActionType() action.Type
-	Execute(ctx context.Context, a action.Action, stdout, stderr io.Writer) error
+	Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error
 }

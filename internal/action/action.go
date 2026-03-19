@@ -22,6 +22,7 @@ const (
 	UninstallPackage
 	UninstallMiseTool
 	DeleteDefaults
+	InstallMasApp
 )
 
 func (t Type) String() string {
@@ -58,6 +59,8 @@ func (t Type) String() string {
 		return "UninstallMiseTool"
 	case DeleteDefaults:
 		return "DeleteDefaults"
+	case InstallMasApp:
+		return "InstallMasApp"
 	default:
 		return "Unknown"
 	}
@@ -87,6 +90,9 @@ type Action struct {
 	MiseToolVersion   string      // InstallMiseTool
 	ShellPath         string      // SetShell
 	ShellUsername     string      // SetShell
+	MasAppID          int64       // InstallMasApp
+	MasAppName        string      // InstallMasApp
+	NeedsSudo         bool        // action requires privilege escalation
 }
 
 // AllTypes returns every declared action Type value.
@@ -96,6 +102,7 @@ func AllTypes() []Type {
 		InstallPackage, SetDefaults, SetDock, CloneRepo, PullRepo,
 		InstallFont, InstallMiseTool, SetShell,
 		UninstallPackage, UninstallMiseTool, DeleteDefaults,
+		InstallMasApp,
 	}
 }
 

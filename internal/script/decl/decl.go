@@ -24,6 +24,7 @@ const (
 	Font
 	MiseTool
 	Shell
+	MasApp
 )
 
 func (d Type) String() string {
@@ -48,6 +49,8 @@ func (d Type) String() string {
 		return "MiseTool"
 	case Shell:
 		return "Shell"
+	case MasApp:
+		return "MasApp"
 	default:
 		return "Unknown"
 	}
@@ -79,11 +82,13 @@ type Declaration struct {
 	MiseToolVersion string        // MiseTool
 	ShellPath       string        // Shell
 	ShellUsername   string        // Shell
+	MasAppID        int64         // MasApp
+	MasAppName      string        // MasApp
 }
 
 // AllTypes returns every declared Type value.
 func AllTypes() []Type {
-	return []Type{File, Dir, Symlink, Package, Defaults, Dock, GitRepo, Font, MiseTool, Shell}
+	return []Type{File, Dir, Symlink, Package, Defaults, Dock, GitRepo, Font, MiseTool, Shell, MasApp}
 }
 
 // DockFolder describes a folder entry in the Dock declaration.

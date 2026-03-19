@@ -646,6 +646,94 @@ func TestMise_InvalidSecondArg(t *testing.T) {
 	}
 }
 
+func TestMas_SingleApp(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.mas(497799835, "Xcode")`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(*decls) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(*decls))
+	}
+	d := (*decls)[0]
+	if d.Type != decl.MasApp {
+		t.Errorf("type = %v, want MasApp", d.Type)
+	}
+	if d.MasAppID != 497799835 {
+		t.Errorf("id = %d, want 497799835", d.MasAppID)
+	}
+	if d.MasAppName != "Xcode" {
+		t.Errorf("name = %q, want Xcode", d.MasAppName)
+	}
+}
+
+func TestMas_SingleAppNoName(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.mas(497799835)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(*decls) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(*decls))
+	}
+	d := (*decls)[0]
+	if d.MasAppID != 497799835 {
+		t.Errorf("id = %d, want 497799835", d.MasAppID)
+	}
+	if d.MasAppName != "" {
+		t.Errorf("name = %q, want empty", d.MasAppName)
+	}
+}
+
+func TestMas_ArrayForm(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.mas([{id: 497799835, name: "Xcode"}, {id: 409183694, name: "Keynote"}])`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(*decls) != 2 {
+		t.Fatalf("expected 2 declarations, got %d", len(*decls))
+	}
+	if (*decls)[0].MasAppID != 497799835 {
+		t.Errorf("[0] id = %d", (*decls)[0].MasAppID)
+	}
+	if (*decls)[0].MasAppName != "Xcode" {
+		t.Errorf("[0] name = %q", (*decls)[0].MasAppName)
+	}
+	if (*decls)[1].MasAppID != 409183694 {
+		t.Errorf("[1] id = %d", (*decls)[1].MasAppID)
+	}
+}
+
+func TestMas_InvalidArg(t *testing.T) {
+	t.Parallel()
+	vm, _ := setupModule(t)
+
+	_, err := vm.RunString(`c.mas("not-a-number")`)
+	if err == nil {
+		t.Fatal("expected error for mas(string)")
+	}
+}
+
+func TestMas_NoArgs(t *testing.T) {
+	t.Parallel()
+	vm, _ := setupModule(t)
+
+	_, err := vm.RunString(`c.mas()`)
+	if err == nil {
+		t.Fatal("expected error for mas() with no args")
+	}
+}
+
 func TestExpandPath(t *testing.T) {
 	t.Parallel()
 

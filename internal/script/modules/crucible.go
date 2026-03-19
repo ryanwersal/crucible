@@ -43,6 +43,7 @@ func (m *CrucibleModule) Export() *goja.Object {
 	_ = obj.Set("dock", m.dock)
 	_ = obj.Set("git", m.git)
 	_ = obj.Set("font", m.font)
+	_ = obj.Set("mas", m.mas)
 	_ = obj.Set("mise", m.mise)
 	_ = obj.Set("shell", m.shell)
 	_ = obj.Set("log", m.log)
@@ -424,6 +425,72 @@ func (m *CrucibleModule) font(call goja.FunctionCall) goja.Value {
 	}
 
 	return goja.Undefined()
+}
+
+// mas declares Mac App Store apps to install.
+// Usage: c.mas(497799835, "Xcode")          // single app (name optional)
+//
+//	c.mas([{id: 497799835, name: "Xcode"}, ...]) // array of objects
+func (m *CrucibleModule) mas(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		panic(m.vm.NewGoError(fmt.Errorf("mas() requires an app ID or array argument")))
+	}
+
+	exported := call.Arguments[0].Export()
+	switch v := exported.(type) {
+	case int64:
+		m.addMasApp(v, masName(call, 1, m.vm))
+	case float64:
+		m.addMasApp(int64(v), masName(call, 1, m.vm))
+	case []any:
+		for _, item := range v {
+			fm, ok := item.(map[string]any)
+			if !ok {
+				panic(m.vm.NewGoError(fmt.Errorf("mas() array elements must be objects with an id field")))
+			}
+			id, ok := toInt64(fm["id"])
+			if !ok {
+				panic(m.vm.NewGoError(fmt.Errorf("mas() array element missing numeric id field")))
+			}
+			name, _ := fm["name"].(string)
+			m.addMasApp(id, name)
+		}
+	default:
+		panic(m.vm.NewGoError(fmt.Errorf("mas() argument must be a numeric ID or array of objects")))
+	}
+
+	return goja.Undefined()
+}
+
+func (m *CrucibleModule) addMasApp(id int64, name string) {
+	*m.declarations = append(*m.declarations, decl.Declaration{
+		Type:       decl.MasApp,
+		MasAppID:   id,
+		MasAppName: name,
+	})
+}
+
+// masName extracts the optional name argument at the given index.
+func masName(call goja.FunctionCall, idx int, vm *goja.Runtime) string {
+	if len(call.Arguments) > idx {
+		v := call.Arguments[idx]
+		if !goja.IsUndefined(v) && !goja.IsNull(v) {
+			return v.String()
+		}
+	}
+	return ""
+}
+
+// toInt64 converts a value that may be float64 or int64 to int64.
+func toInt64(v any) (int64, bool) {
+	switch n := v.(type) {
+	case int64:
+		return n, true
+	case float64:
+		return int64(n), true
+	default:
+		return 0, false
+	}
 }
 
 // mise declares globally installed mise tools.

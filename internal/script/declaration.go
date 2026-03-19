@@ -25,6 +25,7 @@ const (
 	DeclFont     = decl.Font
 	DeclMiseTool = decl.MiseTool
 	DeclShell    = decl.Shell
+	DeclMasApp   = decl.MasApp
 
 	DeclPresent = decl.Present
 	DeclAbsent  = decl.Absent

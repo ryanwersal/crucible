@@ -66,12 +66,12 @@ func (r *Registry) PlanBatch(ctx context.Context, store *fact.Store, env Env, t 
 }
 
 // Execute dispatches a single action to its executor.
-func (r *Registry) Execute(ctx context.Context, a action.Action, stdout, stderr io.Writer) error {
+func (r *Registry) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
 	e, ok := r.executors[a.Type]
 	if !ok {
 		return fmt.Errorf("no executor registered for action type %v", a.Type)
 	}
-	return e.Execute(ctx, a, stdout, stderr)
+	return e.Execute(ctx, a, stdin, stdout, stderr)
 }
 
 // Validate checks that every known declaration and action type has a
@@ -91,7 +91,7 @@ func (r *Registry) Validate() error {
 		}
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("registry validation failed:\n  %s", fmt.Sprintf("%s", joinLines(missing)))
+		return fmt.Errorf("registry validation failed:\n  %s", joinLines(missing))
 	}
 	return nil
 }
@@ -113,6 +113,7 @@ func DefaultRegistry() *Registry {
 	r.RegisterBatchHandler(PackageHandler{})
 	r.RegisterBatchHandler(FontHandler{})
 	r.RegisterBatchHandler(MiseToolHandler{})
+	r.RegisterBatchHandler(MasHandler{})
 
 	// Action executors
 	r.RegisterExecutor(WriteFileExecutor{})
@@ -131,6 +132,7 @@ func DefaultRegistry() *Registry {
 	r.RegisterExecutor(InstallMiseToolExecutor{})
 	r.RegisterExecutor(UninstallMiseToolExecutor{})
 	r.RegisterExecutor(SetShellExecutor{})
+	r.RegisterExecutor(InstallMasAppExecutor{})
 
 	return r
 }
