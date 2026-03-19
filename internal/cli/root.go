@@ -40,6 +40,7 @@ func buildRootCmd(opts *rootOpts) *cobra.Command {
 	cmd.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", false, "enable debug logging")
 
 	cmd.AddCommand(newApplyCmd(opts))
+	cmd.AddCommand(newReferenceCmd())
 	cmd.AddCommand(newVersionCmd())
 
 	return cmd
