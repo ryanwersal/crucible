@@ -76,7 +76,11 @@ func writeFlags(b *strings.Builder, cmd *cobra.Command) {
 
 const jsAPI = `# JavaScript API
 
-Scripts import the crucible module as ` + "`c`" + `. Each function declares desired state.
+Scripts import the crucible module:
+
+  var c = require("crucible");
+
+Each function on ` + "`c`" + ` declares desired state. System facts are available via ` + "`c.facts`" + `.
 All path arguments accept ` + "`~`" + ` as a prefix for the target (home) directory.
 Any resource function accepts ` + "`{ state: \"absent\" }`" + ` as its options to remove the resource.
 
@@ -216,26 +220,31 @@ func writeJSAPI(b *strings.Builder) {
 	b.WriteString("\n")
 }
 
-const factsDoc = `# Facts Module
+const factsDoc = `# Facts
 
-Scripts can access system state via the ` + "`facts`" + ` module. Facts are collected
-lazily and cached for the duration of a plan phase.
+System state is available via ` + "`c.facts`" + ` (no separate import needed):
 
-## facts.os
+  var c = require("crucible");
+  c.log(c.facts.os.name);               // "darwin"
+  if (c.facts.file("~/.bashrc").exists) { ... }
+
+Facts are collected lazily and cached for the duration of a plan phase.
+
+## c.facts.os
 
 Pre-collected OS information object:
 - name: string — operating system (e.g. "darwin", "linux")
 - arch: string — architecture (e.g. "arm64", "amd64")
 - hostname: string — machine hostname
 
-## facts.homebrew
+## c.facts.homebrew
 
 Pre-collected Homebrew state object:
 - available: boolean — whether brew is installed
 - formulae: string[] — installed formula names
 - casks: string[] — installed cask names
 
-## facts.file(path)
+## c.facts.file(path)
 
 Returns file information for the given path:
 - exists: boolean
@@ -245,7 +254,7 @@ Returns file information for the given path:
 - isDir: boolean
 - isLink: boolean
 
-## facts.dir(path)
+## c.facts.dir(path)
 
 Returns directory information for the given path:
 - exists: boolean

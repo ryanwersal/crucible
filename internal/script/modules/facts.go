@@ -9,9 +9,9 @@ import (
 	"github.com/ryanwersal/crucible/internal/fact"
 )
 
-// FactsModule implements the "crucible/facts" native module that exposes
-// system facts to JavaScript. OS and homebrew facts are pre-collected;
-// file and dir facts are collected on demand.
+// FactsModule exposes system facts to JavaScript as c.facts.
+// OS and homebrew facts are pre-collected; file and dir facts are
+// collected on demand.
 type FactsModule struct {
 	vm    *goja.Runtime
 	ctx   context.Context

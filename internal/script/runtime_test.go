@@ -73,8 +73,7 @@ func TestRuntime_Facts(t *testing.T) {
 
 	scriptContent := []byte(`
 		var c = require("crucible");
-		var facts = require("crucible/facts");
-		c.file("~/os.txt", { content: facts.os.name });
+		c.file("~/os.txt", { content: c.facts.os.name });
 	`)
 
 	ctx := context.Background()

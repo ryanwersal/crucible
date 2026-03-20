@@ -16,6 +16,18 @@ func testCmd(t *testing.T) (*bytes.Buffer, *bytes.Buffer, func(args ...string) e
 	return testCmdDirs(src, tgt)
 }
 
+// testCmdWithScript builds a root command with an empty crucible.js in the source dir.
+func testCmdWithScript(t *testing.T) (string, string, *bytes.Buffer, *bytes.Buffer, func(args ...string) error) {
+	t.Helper()
+	src := t.TempDir()
+	tgt := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "crucible.js"), []byte(`// empty`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, run := testCmdDirs(src, tgt)
+	return src, tgt, stdout, stderr, run
+}
+
 func testCmdDirs(src, tgt string) (*bytes.Buffer, *bytes.Buffer, func(args ...string) error) {
 	var stdout, stderr bytes.Buffer
 	opts := &rootOpts{source: src, target: tgt}
@@ -31,7 +43,7 @@ func testCmdDirs(src, tgt string) (*bytes.Buffer, *bytes.Buffer, func(args ...st
 
 func TestApplyCmd_DryRun_UpToDate(t *testing.T) {
 	t.Parallel()
-	stdout, _, run := testCmd(t)
+	_, _, stdout, _, run := testCmdWithScript(t)
 
 	if err := run("apply", "--dry-run"); err != nil {
 		t.Fatal(err)
@@ -41,11 +53,25 @@ func TestApplyCmd_DryRun_UpToDate(t *testing.T) {
 	}
 }
 
+func TestApplyCmd_DryRun_NoScript_Fails(t *testing.T) {
+	t.Parallel()
+	_, _, run := testCmd(t)
+
+	if err := run("apply", "--dry-run"); err == nil {
+		t.Fatal("expected error when crucible.js is missing")
+	}
+}
+
 func TestApplyCmd_DryRun_ShowsActions(t *testing.T) {
 	t.Parallel()
 	src := t.TempDir()
 	tgt := t.TempDir()
-	if err := os.WriteFile(filepath.Join(src, "hello.txt"), []byte("hello"), 0o644); err != nil {
+
+	scriptContent := `
+		var c = require("crucible");
+		c.file("~/.testfile", { content: "hello" });
+	`
+	if err := os.WriteFile(filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -63,7 +89,12 @@ func TestApplyCmd_DryRun_NoChanges(t *testing.T) {
 	t.Parallel()
 	src := t.TempDir()
 	tgt := t.TempDir()
-	if err := os.WriteFile(filepath.Join(src, "test.txt"), []byte("test"), 0o644); err != nil {
+
+	scriptContent := `
+		var c = require("crucible");
+		c.file("~/.testfile", { content: "hello" });
+	`
+	if err := os.WriteFile(filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -72,7 +103,7 @@ func TestApplyCmd_DryRun_NoChanges(t *testing.T) {
 	if err := run("apply", "--dry-run"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(tgt, "test.txt")); err == nil {
+	if _, err := os.Stat(filepath.Join(tgt, ".testfile")); err == nil {
 		t.Fatal("dry run should not create files")
 	}
 }
@@ -81,7 +112,12 @@ func TestApplyCmd_CreatesFiles(t *testing.T) {
 	t.Parallel()
 	src := t.TempDir()
 	tgt := t.TempDir()
-	if err := os.WriteFile(filepath.Join(src, "test.txt"), []byte("applied"), 0o644); err != nil {
+
+	scriptContent := `
+		var c = require("crucible");
+		c.file("~/.testfile", { content: "applied", mode: 420 });
+	`
+	if err := os.WriteFile(filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -90,7 +126,7 @@ func TestApplyCmd_CreatesFiles(t *testing.T) {
 	if err := run("apply"); err != nil {
 		t.Fatal(err)
 	}
-	content, err := os.ReadFile(filepath.Join(tgt, "test.txt"))
+	content, err := os.ReadFile(filepath.Join(tgt, ".testfile"))
 	if err != nil {
 		t.Fatalf("file not created: %v", err)
 	}

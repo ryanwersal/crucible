@@ -2,16 +2,13 @@ package engine
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"golang.org/x/sync/errgroup"
 
@@ -64,9 +61,9 @@ func (e *Engine) SetScriptFile(path string) {
 	e.scriptFile = path
 }
 
-// Plan walks the source directory, collects facts about corresponding target
-// paths, and returns the full result of comparing desired vs actual state.
-// If a crucible.js entry point exists, script-driven planning is used instead.
+// Plan loads the crucible.js script (from the source directory or an explicit
+// script file), collects facts about the current system state, and returns the
+// result of comparing desired vs actual state.
 func (e *Engine) Plan(ctx context.Context) (action.PlanResult, error) {
 	store := fact.NewStore()
 
@@ -80,118 +77,10 @@ func (e *Engine) Plan(ctx context.Context) (action.PlanResult, error) {
 
 	loader := script.NewLoader(e.sourceDir)
 	_, content, err := loader.EntryPoint()
-	if errors.Is(err, script.ErrNoScript) {
-		return e.planWalk(ctx, store)
-	}
 	if err != nil {
 		return action.PlanResult{}, fmt.Errorf("load script: %w", err)
 	}
 	return e.planScript(ctx, store, content)
-}
-
-// planWalk is the original WalkDir-based planning logic.
-func (e *Engine) planWalk(ctx context.Context, store *fact.Store) (action.PlanResult, error) {
-	var result action.PlanResult
-
-	err := filepath.WalkDir(e.sourceDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Skip dotfiles/dirs and crucible.yaml/crucible.js at the source root
-		name := d.Name()
-		if strings.HasPrefix(name, ".") {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if filepath.Dir(path) == e.sourceDir && (name == "crucible.yaml" || name == "crucible.js") {
-			return nil
-		}
-
-		rel, err := filepath.Rel(e.sourceDir, path)
-		if err != nil {
-			return fmt.Errorf("compute relative path: %w", err)
-		}
-		targetPath := filepath.Join(e.targetDir, rel)
-
-		if d.IsDir() {
-			info, err := d.Info()
-			if err != nil {
-				return fmt.Errorf("stat source dir %s: %w", path, err)
-			}
-			dirFact, err := fact.Get(ctx, store, "dir:"+targetPath, fact.DirCollector{Path: targetPath})
-			if err != nil {
-				return err
-			}
-			acts := action.DiffDir(action.DesiredDir{Path: targetPath, Mode: info.Mode().Perm()}, dirFact)
-			if len(acts) == 0 {
-				result.Observations = append(result.Observations, action.Observation{
-					Description: fmt.Sprintf("%s (up to date)", targetPath),
-				})
-			} else {
-				result.Actions = append(result.Actions, acts...)
-			}
-			return nil
-		}
-
-		// Handle symlinks
-		if d.Type()&fs.ModeSymlink != 0 {
-			linkTarget, err := os.Readlink(path)
-			if err != nil {
-				return fmt.Errorf("readlink %s: %w", path, err)
-			}
-			symlinkFact, err := fact.Get(ctx, store, "symlink:"+targetPath, fact.SymlinkCollector{Path: targetPath})
-			if err != nil {
-				return err
-			}
-			acts := action.DiffSymlink(action.DesiredSymlink{Path: targetPath, Target: linkTarget}, symlinkFact)
-			if len(acts) == 0 {
-				result.Observations = append(result.Observations, action.Observation{
-					Description: fmt.Sprintf("%s (up to date)", targetPath),
-				})
-			} else {
-				result.Actions = append(result.Actions, acts...)
-			}
-			return nil
-		}
-
-		// Regular file
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("read source file %s: %w", path, err)
-		}
-		info, err := d.Info()
-		if err != nil {
-			return fmt.Errorf("stat source file %s: %w", path, err)
-		}
-		fileFact, err := fact.Get(ctx, store, "file:"+targetPath, fact.FileCollector{Path: targetPath})
-		if err != nil {
-			return err
-		}
-		acts, err := action.DiffFile(action.DesiredFile{
-			Path:    targetPath,
-			Content: content,
-			Mode:    info.Mode().Perm(),
-		}, fileFact)
-		if err != nil {
-			return err
-		}
-		if len(acts) == 0 {
-			result.Observations = append(result.Observations, action.Observation{
-				Description: fmt.Sprintf("%s (up to date)", targetPath),
-			})
-		} else {
-			result.Actions = append(result.Actions, acts...)
-		}
-		return nil
-	})
-	if err != nil {
-		return action.PlanResult{}, fmt.Errorf("walk source: %w", err)
-	}
-
-	return result, nil
 }
 
 // planScript executes a crucible.js script and converts the resulting

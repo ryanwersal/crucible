@@ -176,17 +176,16 @@ crucible modules:
 
 ```javascript
 const c = require("crucible");
-const facts = require("crucible/facts");
 
 // Conditional logic — the whole point of scripting
-if (facts.os.name === "darwin") {
+if (c.facts.os.name === "darwin") {
     c.brew("coreutils");
     c.brew("firefox", { type: "cask" });
 }
 
 // Files — inline content via JS template literals
 c.file("~/.gitconfig", {
-    content: `[user]\n  name = Ryan\n  email = ${facts.os.hostname === "work" ? "work@co.com" : "me@home.com"}`,
+    content: `[user]\n  name = Ryan\n  email = ${c.facts.os.hostname === "work" ? "work@co.com" : "me@home.com"}`,
     mode: 0o644,
 });
 
@@ -235,8 +234,8 @@ Facts are collected during the plan phase and cached for the duration of that ph
 return structured data, not raw strings. A file fact returns a struct with hash, mode, uid,
 gid, mtime -- not the output of `stat`.
 
-Facts are exposed to scripts via the `crucible/facts` module. Scripts access facts like
-`facts.os.name`, `facts.homebrew.formulae`, `facts.file(path)`, etc.
+Facts are available via `c.facts` on the crucible module. Scripts access facts like
+`c.facts.os.name`, `c.facts.homebrew.formulae`, `c.facts.file(path)`, etc.
 
 ### Operations
 

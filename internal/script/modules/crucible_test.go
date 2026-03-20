@@ -14,7 +14,7 @@ func setupModule(t *testing.T) (*goja.Runtime, *[]decl.Declaration) {
 	vm := goja.New()
 	declarations := &[]decl.Declaration{}
 	mod := NewCrucibleModule(vm, slog.New(slog.DiscardHandler), "/home/user", declarations)
-	_ = vm.Set("c", mod.Export())
+	_ = vm.Set("c", mod.Export(nil))
 	return vm, declarations
 }
 

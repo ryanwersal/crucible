@@ -33,7 +33,8 @@ func NewCrucibleModule(vm *goja.Runtime, logger *slog.Logger, targetDir string, 
 }
 
 // Export returns a goja.Object exposing the module's API.
-func (m *CrucibleModule) Export() *goja.Object {
+// If facts is non-nil, it is attached as c.facts.
+func (m *CrucibleModule) Export(facts *FactsModule) *goja.Object {
 	obj := m.vm.NewObject()
 	_ = obj.Set("file", m.file)
 	_ = obj.Set("dir", m.dir)
@@ -47,6 +48,9 @@ func (m *CrucibleModule) Export() *goja.Object {
 	_ = obj.Set("mise", m.mise)
 	_ = obj.Set("shell", m.shell)
 	_ = obj.Set("log", m.log)
+	if facts != nil {
+		_ = obj.Set("facts", facts.Export())
+	}
 	return obj
 }
 

@@ -49,15 +49,11 @@ func NewRuntime(ctx context.Context, logger *slog.Logger, sourceDir, targetDir s
 	// Enable console (wired to stdout via goja_nodejs)
 	console.Enable(vm)
 
-	// Register native modules
+	// Register the crucible native module with facts attached as c.facts.
 	r.registry.RegisterNativeModule("crucible", func(runtime *goja.Runtime, module *goja.Object) {
+		factsMod := modules.NewFactsModule(runtime, ctx, store)
 		mod := modules.NewCrucibleModule(runtime, logger, targetDir, &r.declarations)
-		_ = module.Set("exports", mod.Export())
-	})
-
-	r.registry.RegisterNativeModule("crucible/facts", func(runtime *goja.Runtime, module *goja.Object) {
-		mod := modules.NewFactsModule(runtime, ctx, store)
-		_ = module.Set("exports", mod.Export())
+		_ = module.Set("exports", mod.Export(factsMod))
 	})
 
 	return r

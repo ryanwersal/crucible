@@ -29,7 +29,7 @@ func (l *Loader) EntryPoint() (string, []byte, error) {
 
 	content, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return "", nil, ErrNoScript
+		return "", nil, fmt.Errorf("%w in %s", ErrNoScript, l.sourceDir)
 	}
 	if err != nil {
 		return "", nil, fmt.Errorf("read %s: %w", path, err)

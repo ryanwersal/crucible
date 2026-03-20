@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"github.com/ryanwersal/crucible/internal/action"
 	"github.com/ryanwersal/crucible/internal/fact"
@@ -127,8 +128,21 @@ func (r *Registry) AllDeclTypes() []decl.Type {
 	return decl.AllTypes()
 }
 
+var (
+	defaultRegistry     *Registry
+	defaultRegistryOnce sync.Once
+)
+
 // DefaultRegistry returns a registry with all built-in handlers and executors.
+// It is safe to call concurrently; the registry is initialized once.
 func DefaultRegistry() *Registry {
+	defaultRegistryOnce.Do(func() {
+		defaultRegistry = newDefaultRegistry()
+	})
+	return defaultRegistry
+}
+
+func newDefaultRegistry() *Registry {
 	r := NewRegistry()
 
 	// Per-declaration handlers

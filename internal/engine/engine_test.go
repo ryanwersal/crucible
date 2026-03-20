@@ -2,12 +2,14 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/ryanwersal/crucible/internal/action"
+	"github.com/ryanwersal/crucible/internal/script"
 )
 
 func mustWriteFile(t *testing.T, path string, data []byte, perm os.FileMode) {
@@ -24,180 +26,31 @@ func mustMkdirAll(t *testing.T, path string, perm os.FileMode) {
 	}
 }
 
-func TestPlan_NewFiles(t *testing.T) {
+func TestPlan_NoScript_Fails(t *testing.T) {
 	t.Parallel()
 	src := t.TempDir()
 	tgt := t.TempDir()
 
-	mustWriteFile(t, filepath.Join(src, "hello.txt"), []byte("hello"), 0o644)
-	mustMkdirAll(t, filepath.Join(src, "subdir"), 0o755)
-	mustWriteFile(t, filepath.Join(src, "subdir", "nested.txt"), []byte("nested"), 0o644)
-
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	result, err := eng.Plan(context.Background())
-	if err != nil {
-		t.Fatal(err)
+	_, err := eng.Plan(context.Background())
+	if err == nil {
+		t.Fatal("expected error when crucible.js is missing")
 	}
-
-	if len(result.Actions) == 0 {
-		t.Fatal("expected actions for new files")
-	}
-
-	hasWrite := false
-	hasDir := false
-	for _, a := range result.Actions {
-		switch a.Type {
-		case action.WriteFile:
-			hasWrite = true
-		case action.CreateDir:
-			hasDir = true
-		}
-	}
-	if !hasWrite {
-		t.Fatal("expected WriteFile action")
-	}
-	if !hasDir {
-		t.Fatal("expected CreateDir action")
+	if !errors.Is(err, script.ErrNoScript) {
+		t.Errorf("expected ErrNoScript, got: %v", err)
 	}
 }
 
-func TestPlan_Idempotent(t *testing.T) {
+func TestPlan_ExplicitScriptFile_NotFound(t *testing.T) {
 	t.Parallel()
 	src := t.TempDir()
 	tgt := t.TempDir()
 
-	mustWriteFile(t, filepath.Join(src, "test.txt"), []byte("hello"), 0o644)
-
 	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	if _, err := eng.Apply(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	result, err := eng.Plan(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.Actions) != 0 {
-		t.Fatalf("expected 0 actions on second plan, got %d: %v", len(result.Actions), result.Actions)
-	}
-	// 2 observations: the target dir itself + the file
-	if len(result.Observations) != 2 {
-		t.Fatalf("expected 2 observations on second plan, got %d", len(result.Observations))
-	}
-}
-
-func TestPlan_SkipsDotfiles(t *testing.T) {
-	t.Parallel()
-	src := t.TempDir()
-	tgt := t.TempDir()
-
-	mustWriteFile(t, filepath.Join(src, ".hidden"), []byte("secret"), 0o644)
-	mustMkdirAll(t, filepath.Join(src, ".git"), 0o755)
-	mustWriteFile(t, filepath.Join(src, ".git", "config"), []byte("git"), 0o644)
-
-	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	result, err := eng.Plan(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(result.Actions) != 0 {
-		t.Fatalf("expected 0 actions (dotfiles skipped), got %d", len(result.Actions))
-	}
-}
-
-func TestPlan_SkipsCrucibleYaml(t *testing.T) {
-	t.Parallel()
-	src := t.TempDir()
-	tgt := t.TempDir()
-
-	mustWriteFile(t, filepath.Join(src, "crucible.yaml"), []byte("config: true"), 0o644)
-	mustWriteFile(t, filepath.Join(src, "real.txt"), []byte("real"), 0o644)
-
-	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	result, err := eng.Plan(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, a := range result.Actions {
-		if filepath.Base(a.Path) == "crucible.yaml" {
-			t.Fatal("crucible.yaml should be skipped")
-		}
-	}
-}
-
-func TestPlan_DetectsContentChange(t *testing.T) {
-	t.Parallel()
-	src := t.TempDir()
-	tgt := t.TempDir()
-
-	mustWriteFile(t, filepath.Join(src, "test.txt"), []byte("v1"), 0o644)
-
-	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	if _, err := eng.Apply(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	mustWriteFile(t, filepath.Join(src, "test.txt"), []byte("v2"), 0o644)
-
-	result, err := eng.Plan(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	hasWrite := false
-	for _, a := range result.Actions {
-		if a.Type == action.WriteFile {
-			hasWrite = true
-		}
-	}
-	if !hasWrite {
-		t.Fatal("expected WriteFile action for changed content")
-	}
-}
-
-func TestApply_CreatesFiles(t *testing.T) {
-	t.Parallel()
-	src := t.TempDir()
-	tgt := t.TempDir()
-
-	mustWriteFile(t, filepath.Join(src, "test.txt"), []byte("hello"), 0o644)
-
-	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	if _, err := eng.Apply(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	content, err := os.ReadFile(filepath.Join(tgt, "test.txt"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(content) != "hello" {
-		t.Fatalf("expected 'hello', got %q", content)
-	}
-}
-
-// TestPlan_BackwardCompat verifies that source dirs without crucible.js
-// still use the WalkDir-based plan (no script needed).
-func TestPlan_BackwardCompat(t *testing.T) {
-	t.Parallel()
-	src := t.TempDir()
-	tgt := t.TempDir()
-
-	mustWriteFile(t, filepath.Join(src, "config.txt"), []byte("value"), 0o644)
-
-	eng := New(src, tgt, slog.New(slog.DiscardHandler))
-	result, err := eng.Plan(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(result.Actions) != 1 {
-		t.Fatalf("expected 1 action, got %d", len(result.Actions))
-	}
-	if result.Actions[0].Type != action.WriteFile {
-		t.Errorf("expected WriteFile, got %s", result.Actions[0].Type)
+	eng.SetScriptFile(filepath.Join(src, "nonexistent.js"))
+	_, err := eng.Plan(context.Background())
+	if err == nil {
+		t.Fatal("expected error for missing explicit script file")
 	}
 }
 
@@ -320,5 +173,31 @@ func TestPlan_Script_Idempotent(t *testing.T) {
 	}
 	if len(result.Observations) != 1 {
 		t.Fatalf("expected 1 observation on second plan, got %d", len(result.Observations))
+	}
+}
+
+// TestPlan_ExplicitScriptFile verifies that SetScriptFile overrides discovery.
+func TestPlan_ExplicitScriptFile(t *testing.T) {
+	t.Parallel()
+	src := t.TempDir()
+	tgt := t.TempDir()
+
+	// Put the script in a non-standard location
+	altDir := t.TempDir()
+	scriptContent := `
+		var c = require("crucible");
+		c.file("~/.vimrc", { content: "set nocompatible" });
+	`
+	mustWriteFile(t, filepath.Join(altDir, "my-config.js"), []byte(scriptContent), 0o644)
+
+	eng := New(src, tgt, slog.New(slog.DiscardHandler))
+	eng.SetScriptFile(filepath.Join(altDir, "my-config.js"))
+	result, err := eng.Plan(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.Actions) == 0 {
+		t.Fatal("expected actions from explicit script file")
 	}
 }

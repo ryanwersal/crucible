@@ -9,9 +9,8 @@ Write a `crucible.js` in your dotfiles directory:
 
 ```javascript
 const c = require("crucible");
-const facts = require("crucible/facts");
 
-if (facts.os.name === "darwin") {
+if (c.facts.os.name === "darwin") {
     c.brew("ripgrep");
     c.brew("firefox", { type: "cask" });
 }

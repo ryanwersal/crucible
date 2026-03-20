@@ -1,5 +1,4 @@
 const c = require("crucible");
-const facts = require("crucible/facts");
 
 // ---------------------------------------------------------------------------
 // Directories
@@ -11,8 +10,8 @@ c.dir("~/.local/bin", { mode: 0o755 });
 // ---------------------------------------------------------------------------
 // Homebrew packages (macOS only)
 // ---------------------------------------------------------------------------
-if (facts.os.name === "darwin") {
-    if (!facts.homebrew.available) {
+if (c.facts.os.name === "darwin") {
+    if (!c.facts.homebrew.available) {
         c.log("Homebrew is not installed — skipping packages");
     } else {
         // System utilities
