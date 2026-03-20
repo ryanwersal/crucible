@@ -63,5 +63,5 @@ func newLogger(verbose bool) *slog.Logger {
 	if verbose {
 		level = slog.LevelDebug
 	}
-	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
+	return slog.New(newHumanHandler(os.Stderr, level))
 }
