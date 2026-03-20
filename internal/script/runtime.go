@@ -74,6 +74,7 @@ func (r *Runtime) Execute(ctx context.Context, file string, source []byte) ([]De
 		}
 	}()
 
+	source = stripShebang(source)
 	_, err := r.vm.RunScript(file, string(source))
 	if err != nil {
 		return nil, wrapGojaError(err, file)

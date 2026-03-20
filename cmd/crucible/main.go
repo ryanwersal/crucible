@@ -19,6 +19,7 @@ func run() int {
 
 	cmd := cli.NewRootCmd()
 	cmd.SetContext(ctx)
+	cmd.SetArgs(cli.RewriteScriptArgs(os.Args[1:], cli.SubcommandNames(cmd)))
 
 	if err := cmd.Execute(); err != nil {
 		return 1

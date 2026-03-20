@@ -153,3 +153,32 @@ func TestApplyCmd_UnknownFlag(t *testing.T) {
 		t.Error("expected error for unknown flag")
 	}
 }
+
+func TestShebangInvocation_MatchesApply(t *testing.T) {
+	t.Parallel()
+	src := t.TempDir()
+	tgt := t.TempDir()
+
+	script := "#!/usr/bin/env crucible\nvar c = require('crucible');\nc.file('~/.testfile', { content: 'shebang' });\n"
+	scriptPath := filepath.Join(src, "crucible.js")
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run via shebang-style: the script path as first arg, simulating OS shebang rewrite.
+	stdout1, _, run1 := testCmdDirs(src, tgt)
+	args := RewriteScriptArgs([]string{scriptPath, "--dry-run"}, SubcommandNames(buildRootCmd(&rootOpts{source: src, target: tgt})))
+	if err := run1(args...); err != nil {
+		t.Fatalf("shebang-style invocation failed: %v", err)
+	}
+
+	// Run via explicit apply.
+	stdout2, _, run2 := testCmdDirs(src, tgt)
+	if err := run2("apply", "--file", scriptPath, "--dry-run"); err != nil {
+		t.Fatalf("explicit apply failed: %v", err)
+	}
+
+	if stdout1.String() != stdout2.String() {
+		t.Errorf("outputs differ:\n  shebang: %q\n  apply:   %q", stdout1.String(), stdout2.String())
+	}
+}

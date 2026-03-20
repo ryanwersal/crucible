@@ -132,8 +132,8 @@ your IDE, whatever you use for code. There is no special edit command. There is 
 unnecessary indirection -- you should just edit the file.
 
 Crucible's source directory is opened in your editor like any project. You modify files
-directly. You run `crucible apply` (or dry-run, diff, etc.) when you want to push state to
-the system. The tool never inserts itself between you and your files.
+directly. You run `./crucible.js` (or `./crucible.js --dry-run`) when you want to push state
+to the system. The tool never inserts itself between you and your files.
 
 ### Source Filename Encoding
 
@@ -175,6 +175,7 @@ desired system state. Users write `crucible.js` files that use CommonJS `require
 crucible modules:
 
 ```javascript
+#!/usr/bin/env crucible
 const c = require("crucible");
 
 // Conditional logic — the whole point of scripting
@@ -258,8 +259,8 @@ crucible from your dotfiles repo. The `crucible.js` entry point drives what gets
 Source files referenced by scripts live alongside the script. The target is always `$HOME`.
 
 ```
-~/dotfiles/           ← run `crucible apply` from here
-├── crucible.js               # Script declaring desired state
+~/dotfiles/           ← your dotfiles repo
+├── crucible.js               # chmod +x, #!/usr/bin/env crucible
 ├── work-setup.js             # Optional sub-module for organization
 ├── fish/
 │   └── config.fish           # Referenced via { source: "fish/config.fish" }
@@ -268,6 +269,9 @@ Source files referenced by scripts live alongside the script. The target is alwa
     └── config.tmpl           # Go template referenced via { template: ".ssh/config.tmpl" }
 ```
 
+The canonical invocation is `./crucible.js` (or `./crucible.js --dry-run`). Use
+`crucible apply` as an alternative when not using a shebang.
+
 If no `crucible.js` exists, the engine falls back to walk-based file sync -- mirroring the
 current directory into `$HOME`. This preserves backward compatibility.
 
@@ -275,7 +279,8 @@ current directory into `$HOME`. This preserves backward compatibility.
 
 The apply process:
 
-1. Check for `crucible.js` in the source directory.
+1. Check for `crucible.js` in the source directory (either via `./crucible.js` shebang
+   invocation or `crucible apply`).
    - If absent, fall back to walk-based file sync (mirror source → target).
    - If present, execute the script-driven pipeline:
 
@@ -299,6 +304,10 @@ The apply process:
 ### CLI
 
 ```
+./crucible.js              # Apply configuration (executable script with shebang)
+./crucible.js --dry-run    # Show what would change without making changes
+
+# Alternative: explicit subcommand
 crucible apply             # Apply configuration to the system
 crucible apply --dry-run   # Show what would change without making changes
 crucible diff              # Show unified diffs of file content changes

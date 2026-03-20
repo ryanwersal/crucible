@@ -35,9 +35,9 @@ func buildRootCmd(opts *rootOpts) *cobra.Command {
 		Short: "A declarative dotfile and system configuration manager",
 		Long: `Crucible manages your dotfiles and system configuration declaratively.
 
-Crucible expects to be run from a directory containing a crucible.js script
-that declares desired system state. Use --dry-run to preview changes before
-applying them.`,
+Make your crucible.js executable with a shebang line (#!/usr/bin/env crucible)
+and run it directly. Alternatively, use 'crucible apply' from a directory
+containing a crucible.js script.`,
 		SilenceUsage: true,
 	}
 

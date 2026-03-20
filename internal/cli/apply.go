@@ -21,9 +21,10 @@ func newApplyCmd(opts *rootOpts) *cobra.Command {
 		Short: "Apply configuration to the system",
 		Long: `Apply configuration to the system.
 
-Crucible looks for a crucible.js script in the current working directory.
-Run this command from the directory containing your crucible.js, or use
---file to specify a script located elsewhere.`,
+The preferred approach is to make your crucible.js executable with a shebang
+line (#!/usr/bin/env crucible) and run it directly: ./crucible.js --dry-run.
+This command is the explicit alternative. Run from the directory containing
+your crucible.js, or use --file to specify a script located elsewhere.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := newLogger(opts.verbose)
 
