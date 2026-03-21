@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/ryanwersal/crucible/internal/action"
 	"github.com/ryanwersal/crucible/internal/action/dock"
+	"github.com/ryanwersal/crucible/internal/fact"
 	"github.com/ryanwersal/crucible/internal/script/decl"
 )
 
@@ -373,6 +375,59 @@ func buildKeyRemapPlist(remaps []action.KeyRemapEntry) string {
 </dict>
 </plist>
 `, escaped)
+}
+
+// SetDisplayExecutor applies display density settings via defaults and CoreGraphics.
+type SetDisplayExecutor struct{}
+
+func (SetDisplayExecutor) ActionType() action.Type { return action.SetDisplay }
+func (SetDisplayExecutor) ActionName() string      { return "SetDisplay" }
+
+func (SetDisplayExecutor) Execute(ctx context.Context, a action.Action, _ io.Reader, _, stderr io.Writer) error {
+	// Set sidebar icon size via NSGlobalDomain defaults.
+	if a.DisplaySidebarIconSize != "" {
+		val, ok := decl.SidebarIconSizeValue(a.DisplaySidebarIconSize)
+		if !ok {
+			return fmt.Errorf("unknown sidebar icon size %q", a.DisplaySidebarIconSize)
+		}
+		cmd := exec.CommandContext(ctx, "defaults", "write", "NSGlobalDomain", "NSTableViewDefaultSizeMode", "-int", fmt.Sprintf("%d", val))
+		cmd.Stderr = stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("setting sidebar icon size: %w", err)
+		}
+	}
+
+	// Set menu bar spacing via currentHost defaults.
+	if a.DisplayMenuBarSpacing == "compact" {
+		cmd := exec.CommandContext(ctx, "defaults", "-currentHost", "write", "-globalDomain", "NSStatusItemSpacing", "-int", "6")
+		cmd.Stderr = stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("setting menu bar spacing: %w", err)
+		}
+		cmd = exec.CommandContext(ctx, "defaults", "-currentHost", "write", "-globalDomain", "NSStatusItemSelectionPadding", "-int", "4")
+		cmd.Stderr = stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("setting menu bar padding: %w", err)
+		}
+	} else if a.DisplayMenuBarSpacing == "default" {
+		// Remove custom spacing to restore macOS defaults.
+		// Deletion fails if the keys don't exist, which is expected and harmless.
+		if err := exec.CommandContext(ctx, "defaults", "-currentHost", "delete", "-globalDomain", "NSStatusItemSpacing").Run(); err != nil {
+			slog.Debug("removing NSStatusItemSpacing (may not exist)", "err", err)
+		}
+		if err := exec.CommandContext(ctx, "defaults", "-currentHost", "delete", "-globalDomain", "NSStatusItemSelectionPadding").Run(); err != nil {
+			slog.Debug("removing NSStatusItemSelectionPadding (may not exist)", "err", err)
+		}
+	}
+
+	// Set resolution via CoreGraphics.
+	if a.DisplayResolution != "" {
+		if err := fact.SetBuiltInDisplayMode(a.DisplayResolution, a.DisplayHZ); err != nil {
+			return fmt.Errorf("setting display resolution: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // xmlEscape escapes special XML characters in a string.

@@ -30,6 +30,7 @@ const (
 	InstallMasApp
 	SetKeyRemap
 	RemoveKeyRemap
+	SetDisplay
 )
 
 var typeNames = map[Type]string{}
@@ -71,8 +72,12 @@ type Action struct {
 	ShellUsername     string       // SetShell
 	MasAppID          int64            // InstallMasApp
 	MasAppName        string           // InstallMasApp
-	KeyRemaps         []KeyRemapEntry  // SetKeyRemap
-	NeedsSudo         bool             // action requires privilege escalation
+	KeyRemaps              []KeyRemapEntry // SetKeyRemap
+	DisplaySidebarIconSize string          // SetDisplay: "small", "medium", "large"
+	DisplayMenuBarSpacing  string          // SetDisplay: "compact", "default"
+	DisplayResolution      string          // SetDisplay: "WxH"
+	DisplayHZ              int             // SetDisplay: refresh rate
+	NeedsSudo              bool            // action requires privilege escalation
 }
 
 // AllTypes returns every registered action Type, sorted by ordinal.

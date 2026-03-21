@@ -48,6 +48,7 @@ func (m *CrucibleModule) Export(facts *FactsModule) *goja.Object {
 	_ = obj.Set("mise", m.mise)
 	_ = obj.Set("shell", m.shell)
 	_ = obj.Set("keyRemap", m.keyRemap)
+	_ = obj.Set("display", m.display)
 	_ = obj.Set("log", m.log)
 	if facts != nil {
 		_ = obj.Set("facts", facts.Export())
@@ -615,6 +616,55 @@ func (m *CrucibleModule) keyRemap(call goja.FunctionCall) goja.Value {
 		KeyRemaps: remaps,
 	})
 
+	return goja.Undefined()
+}
+
+// display declares display density settings.
+// Usage: c.display({ sidebarIconSize: "small", menuBarSpacing: "compact" })
+//
+//	c.display({ resolution: "1800x1169", hz: 120 })
+//	c.display({ sidebarIconSize: "small", menuBarSpacing: "compact", resolution: "1800x1169" })
+func (m *CrucibleModule) display(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		panic(m.vm.NewGoError(fmt.Errorf("display() requires an options object")))
+	}
+
+	opts := call.Arguments[0].ToObject(m.vm)
+
+	d := decl.Declaration{
+		Type: decl.Display,
+	}
+
+	if v := opts.Get("sidebarIconSize"); v != nil && !goja.IsUndefined(v) {
+		size := v.String()
+		if !decl.ValidSidebarIconSize(size) {
+			panic(m.vm.NewGoError(fmt.Errorf("display(): invalid sidebarIconSize %q; valid values: %s",
+				size, strings.Join(decl.ValidSidebarIconSizes(), ", "))))
+		}
+		d.DisplaySidebarIconSize = size
+	}
+
+	if v := opts.Get("menuBarSpacing"); v != nil && !goja.IsUndefined(v) {
+		spacing := v.String()
+		if !decl.ValidMenuBarSpacing(spacing) {
+			panic(m.vm.NewGoError(fmt.Errorf("display(): invalid menuBarSpacing %q; valid values: compact, default", spacing)))
+		}
+		d.DisplayMenuBarSpacing = spacing
+	}
+
+	if v := opts.Get("resolution"); v != nil && !goja.IsUndefined(v) {
+		d.DisplayResolution = v.String()
+	}
+
+	if v := opts.Get("hz"); v != nil && !goja.IsUndefined(v) {
+		d.DisplayHZ = int(v.ToInteger())
+	}
+
+	if d.DisplaySidebarIconSize == "" && d.DisplayMenuBarSpacing == "" && d.DisplayResolution == "" {
+		panic(m.vm.NewGoError(fmt.Errorf("display() requires at least one of: sidebarIconSize, menuBarSpacing, resolution")))
+	}
+
+	*m.declarations = append(*m.declarations, d)
 	return goja.Undefined()
 }
 

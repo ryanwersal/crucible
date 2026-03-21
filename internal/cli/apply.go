@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -66,16 +67,40 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 
 			if !yes {
 				errw := cmd.ErrOrStderr()
-				_, _ = fmt.Fprintf(errw, "%d action(s) will be taken. Proceed? [y/N] ", len(result.Actions))
-				reader := bufio.NewReader(cmd.InOrStdin())
-				answer, err := reader.ReadString('\n')
-				if err != nil && err != io.EOF {
-					return fmt.Errorf("reading confirmation: %w", err)
+				_, _ = fmt.Fprintf(errw, "%d action(s) will be taken:\n", len(result.Actions))
+				for _, a := range result.Actions {
+					if a.NeedsSudo {
+						_, _ = fmt.Fprintf(errw, "  → [sudo] %s\n", a.Description)
+					} else {
+						_, _ = fmt.Fprintf(errw, "  → %s\n", a.Description)
+					}
 				}
-				answer = strings.TrimSpace(strings.ToLower(answer))
-				if answer != "y" && answer != "yes" {
-					_, _ = fmt.Fprintln(errw, "Aborted.")
-					return nil
+				_, _ = fmt.Fprintf(errw, "Proceed? [y/N] ")
+
+				type readResult struct {
+					line string
+					err  error
+				}
+				ch := make(chan readResult, 1) // buffered so the goroutine can exit if ctx wins the select
+				go func() {
+					reader := bufio.NewReader(cmd.InOrStdin())
+					line, err := reader.ReadString('\n')
+					ch <- readResult{line, err}
+				}()
+
+				select {
+				case <-cmd.Context().Done():
+					_, _ = fmt.Fprintln(errw, "\nAborted.")
+					return cmd.Context().Err()
+				case r := <-ch:
+					if r.err != nil && !errors.Is(r.err, io.EOF) {
+						return fmt.Errorf("reading confirmation: %w", r.err)
+					}
+					answer := strings.TrimSpace(strings.ToLower(r.line))
+					if answer != "y" && answer != "yes" {
+						_, _ = fmt.Fprintln(errw, "Aborted.")
+						return nil
+					}
 				}
 			}
 

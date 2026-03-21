@@ -223,6 +223,25 @@ Examples:
   c.keyRemap({ capsLock: "control", control: "capsLock" })
   c.keyRemap({ state: "absent" })
 
+## c.display(options)
+
+Declare display density settings for macOS. Manages sidebar icon size,
+menu bar spacing, and display resolution scaling in a single declaration.
+
+Options:
+- sidebarIconSize: string — "small", "medium", or "large" (maps to NSTableViewDefaultSizeMode)
+- menuBarSpacing: string — "compact" (tighter icon spacing) or "default" (restore macOS default)
+- resolution: string — "WxH" resolution for the built-in display
+- hz: number — refresh rate in Hz (optional, used with resolution)
+
+Resolution is set via CoreGraphics and applies to the built-in display.
+Use System Settings → Displays to discover available resolutions.
+
+Examples:
+  c.display({ sidebarIconSize: "small", menuBarSpacing: "compact" })
+  c.display({ resolution: "1800x1169", hz: 120 })
+  c.display({ sidebarIconSize: "small", menuBarSpacing: "compact", resolution: "1800x1169", hz: 120 })
+
 ## c.log(message)
 
 Log a message during script evaluation. Does not create a declaration.
@@ -344,6 +363,7 @@ var declTypeDescriptions = map[decl.Type]string{
 	decl.Shell:    "Login shell — sets the user's default shell",
 	decl.MasApp:   "Mac App Store app — installed via mas",
 	decl.KeyRemap: "Keyboard modifier remap — applied globally via hidutil with LaunchAgent persistence",
+	decl.Display:  "Display density — sidebar icon size, menu bar spacing, and resolution scaling",
 }
 
 func writeDeclTypes(b *strings.Builder, reg *resource.Registry) {
@@ -380,6 +400,7 @@ var actionTypeDescriptions = map[action.Type]string{
 	action.InstallMasApp:     "Install a Mac App Store app",
 	action.SetKeyRemap:       "Apply keyboard modifier remappings via hidutil and write LaunchAgent",
 	action.RemoveKeyRemap:    "Clear keyboard modifier remappings and remove LaunchAgent",
+	action.SetDisplay:        "Apply display density settings via defaults and CoreGraphics",
 }
 
 func writeActionTypes(b *strings.Builder, reg *resource.Registry) {

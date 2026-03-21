@@ -31,6 +31,7 @@ const (
 	Shell
 	MasApp
 	KeyRemap
+	Display
 )
 
 var typeNames = map[Type]string{}
@@ -74,7 +75,11 @@ type Declaration struct {
 	ShellUsername   string         // Shell
 	MasAppID        int64          // MasApp
 	MasAppName      string         // MasApp
-	KeyRemaps       []KeyRemapEntry // KeyRemap
+	KeyRemaps              []KeyRemapEntry // KeyRemap
+	DisplaySidebarIconSize string          // Display: "small", "medium", "large"
+	DisplayMenuBarSpacing  string          // Display: "compact", "default"
+	DisplayResolution      string          // Display: "WxH" for built-in display
+	DisplayHZ              int             // Display: refresh rate (optional)
 }
 
 // AllTypes returns every registered declaration Type, sorted by ordinal.
@@ -129,6 +134,35 @@ func ValidKeyNames() []string {
 	}
 	slices.Sort(names)
 	return names
+}
+
+// SidebarIconSizeValue maps a human-readable size name to its NSTableViewDefaultSizeMode value.
+var sidebarIconSizes = map[string]int{
+	"small":  1,
+	"medium": 2,
+	"large":  3,
+}
+
+// ValidSidebarIconSize reports whether name is a recognized sidebar icon size.
+func ValidSidebarIconSize(name string) bool {
+	_, ok := sidebarIconSizes[name]
+	return ok
+}
+
+// SidebarIconSizeValue returns the NSTableViewDefaultSizeMode integer for a size name.
+func SidebarIconSizeValue(name string) (int, bool) {
+	v, ok := sidebarIconSizes[name]
+	return v, ok
+}
+
+// ValidSidebarIconSizes returns all recognized size names, sorted.
+func ValidSidebarIconSizes() []string {
+	return []string{"large", "medium", "small"}
+}
+
+// ValidMenuBarSpacing reports whether name is a recognized menu bar spacing mode.
+func ValidMenuBarSpacing(name string) bool {
+	return name == "compact" || name == "default"
 }
 
 // DockFolder describes a folder entry in the Dock declaration.

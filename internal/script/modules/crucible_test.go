@@ -734,6 +734,88 @@ func TestMas_NoArgs(t *testing.T) {
 	}
 }
 
+func TestDisplay_SidebarAndMenuBar(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.display({ sidebarIconSize: "small", menuBarSpacing: "compact" })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(*decls) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(*decls))
+	}
+	d := (*decls)[0]
+	if d.Type != decl.Display {
+		t.Errorf("type = %v, want Display", d.Type)
+	}
+	if d.DisplaySidebarIconSize != "small" {
+		t.Errorf("sidebarIconSize = %q, want small", d.DisplaySidebarIconSize)
+	}
+	if d.DisplayMenuBarSpacing != "compact" {
+		t.Errorf("menuBarSpacing = %q, want compact", d.DisplayMenuBarSpacing)
+	}
+}
+
+func TestDisplay_ResolutionOnly(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.display({ resolution: "1800x1169", hz: 120 })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d := (*decls)[0]
+	if d.DisplayResolution != "1800x1169" {
+		t.Errorf("resolution = %q, want 1800x1169", d.DisplayResolution)
+	}
+	if d.DisplayHZ != 120 {
+		t.Errorf("hz = %d, want 120", d.DisplayHZ)
+	}
+}
+
+func TestDisplay_InvalidSidebarIconSize(t *testing.T) {
+	t.Parallel()
+	vm, _ := setupModule(t)
+
+	_, err := vm.RunString(`c.display({ sidebarIconSize: "huge" })`)
+	if err == nil {
+		t.Fatal("expected error for invalid sidebarIconSize")
+	}
+}
+
+func TestDisplay_InvalidMenuBarSpacing(t *testing.T) {
+	t.Parallel()
+	vm, _ := setupModule(t)
+
+	_, err := vm.RunString(`c.display({ menuBarSpacing: "wide" })`)
+	if err == nil {
+		t.Fatal("expected error for invalid menuBarSpacing")
+	}
+}
+
+func TestDisplay_NoOptions(t *testing.T) {
+	t.Parallel()
+	vm, _ := setupModule(t)
+
+	_, err := vm.RunString(`c.display({})`)
+	if err == nil {
+		t.Fatal("expected error for display() with no recognized options")
+	}
+}
+
+func TestDisplay_NoArgs(t *testing.T) {
+	t.Parallel()
+	vm, _ := setupModule(t)
+
+	_, err := vm.RunString(`c.display()`)
+	if err == nil {
+		t.Fatal("expected error for display() with no args")
+	}
+}
+
 func TestExpandPath(t *testing.T) {
 	t.Parallel()
 
