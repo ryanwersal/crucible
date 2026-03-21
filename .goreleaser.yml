@@ -3,6 +3,8 @@ version: 2
 builds:
   - main: ./cmd/crucible
     binary: crucible
+    env:
+      - CGO_ENABLED=1
     goos:
       - darwin
     goarch:
