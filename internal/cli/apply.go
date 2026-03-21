@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 
 	"github.com/ryanwersal/crucible/internal/action"
 	"github.com/ryanwersal/crucible/internal/engine"
@@ -13,6 +15,7 @@ import (
 func newApplyCmd(opts *rootOpts) *cobra.Command {
 	var (
 		dryRun     bool
+		yes        bool
 		scriptFile string
 	)
 
@@ -44,37 +47,49 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 			}
 			w := cmd.OutOrStdout()
 
-			if dryRun {
-				result, err := eng.Plan(cmd.Context())
-				if err != nil {
-					return err
-				}
-				printResult(w, result)
-				_, _ = fmt.Fprintln(w)
-				if len(result.Actions) == 0 {
-					_, _ = fmt.Fprintln(w, "Everything up to date.")
-				} else {
-					_, _ = fmt.Fprintf(w, "%d action(s) would be taken.\n", len(result.Actions))
-				}
-				return nil
-			}
-
-			result, err := eng.Apply(cmd.Context())
+			result, err := eng.Plan(cmd.Context())
 			if err != nil {
 				return err
 			}
 			printResult(w, result)
 			_, _ = fmt.Fprintln(w)
+
 			if len(result.Actions) == 0 {
 				_, _ = fmt.Fprintln(w, "Everything up to date.")
-			} else {
-				_, _ = fmt.Fprintf(w, "%d action(s) applied.\n", len(result.Actions))
+				return nil
 			}
+
+			if dryRun {
+				_, _ = fmt.Fprintf(w, "%d action(s) would be taken.\n", len(result.Actions))
+				return nil
+			}
+
+			if !yes {
+				errw := cmd.ErrOrStderr()
+				_, _ = fmt.Fprintf(errw, "%d action(s) will be taken. Proceed? [y/N] ", len(result.Actions))
+				reader := bufio.NewReader(cmd.InOrStdin())
+				answer, err := reader.ReadString('\n')
+				if err != nil && err != io.EOF {
+					return fmt.Errorf("reading confirmation: %w", err)
+				}
+				answer = strings.TrimSpace(strings.ToLower(answer))
+				if answer != "y" && answer != "yes" {
+					_, _ = fmt.Fprintln(errw, "Aborted.")
+					return nil
+				}
+			}
+
+			result, err = eng.ApplyResult(cmd.Context(), result)
+			if err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(w, "%d action(s) applied.\n", len(result.Actions))
 			return nil
 		},
 	}
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be done without making changes")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompt")
 	cmd.Flags().StringVarP(&scriptFile, "file", "f", "", "path to a crucible.js script (default: ./crucible.js)")
 	return cmd
 }

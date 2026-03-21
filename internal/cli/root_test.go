@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,11 +30,18 @@ func testCmdWithScript(t *testing.T) (string, string, *bytes.Buffer, *bytes.Buff
 }
 
 func testCmdDirs(src, tgt string) (*bytes.Buffer, *bytes.Buffer, func(args ...string) error) {
+	return testCmdDirsWithStdin(src, tgt, nil)
+}
+
+func testCmdDirsWithStdin(src, tgt string, stdin io.Reader) (*bytes.Buffer, *bytes.Buffer, func(args ...string) error) {
 	var stdout, stderr bytes.Buffer
 	opts := &rootOpts{source: src, target: tgt}
 	cmd := buildRootCmd(opts)
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
+	if stdin != nil {
+		cmd.SetIn(stdin)
+	}
 	run := func(args ...string) error {
 		cmd.SetArgs(args)
 		return cmd.Execute()
@@ -123,7 +131,7 @@ func TestApplyCmd_CreatesFiles(t *testing.T) {
 
 	_, _, run := testCmdDirs(src, tgt)
 
-	if err := run("apply"); err != nil {
+	if err := run("apply", "--yes"); err != nil {
 		t.Fatal(err)
 	}
 	content, err := os.ReadFile(filepath.Join(tgt, ".testfile"))
@@ -180,5 +188,105 @@ func TestShebangInvocation_MatchesApply(t *testing.T) {
 
 	if stdout1.String() != stdout2.String() {
 		t.Errorf("outputs differ:\n  shebang: %q\n  apply:   %q", stdout1.String(), stdout2.String())
+	}
+}
+
+func writeTestScript(t *testing.T, src string) {
+	t.Helper()
+	scriptContent := `
+		var c = require("crucible");
+		c.file("~/.testfile", { content: "applied", mode: 420 });
+	`
+	if err := os.WriteFile(filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestApplyCmd_ConfirmYes(t *testing.T) {
+	t.Parallel()
+	src := t.TempDir()
+	tgt := t.TempDir()
+	writeTestScript(t, src)
+
+	_, _, run := testCmdDirsWithStdin(src, tgt, strings.NewReader("y\n"))
+
+	if err := run("apply"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(tgt, ".testfile")); err != nil {
+		t.Fatal("file should have been created after confirming 'y'")
+	}
+}
+
+func TestApplyCmd_ConfirmYesFull(t *testing.T) {
+	t.Parallel()
+	src := t.TempDir()
+	tgt := t.TempDir()
+	writeTestScript(t, src)
+
+	_, _, run := testCmdDirsWithStdin(src, tgt, strings.NewReader("yes\n"))
+
+	if err := run("apply"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(tgt, ".testfile")); err != nil {
+		t.Fatal("file should have been created after confirming 'yes'")
+	}
+}
+
+func TestApplyCmd_ConfirmNo(t *testing.T) {
+	t.Parallel()
+	src := t.TempDir()
+	tgt := t.TempDir()
+	writeTestScript(t, src)
+
+	_, stderr, run := testCmdDirsWithStdin(src, tgt, strings.NewReader("n\n"))
+
+	if err := run("apply"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(tgt, ".testfile")); err == nil {
+		t.Fatal("file should not have been created after declining")
+	}
+	if !strings.Contains(stderr.String(), "Aborted") {
+		t.Errorf("stderr = %q, want 'Aborted'", stderr.String())
+	}
+}
+
+func TestApplyCmd_ConfirmEmpty(t *testing.T) {
+	t.Parallel()
+	src := t.TempDir()
+	tgt := t.TempDir()
+	writeTestScript(t, src)
+
+	_, stderr, run := testCmdDirsWithStdin(src, tgt, strings.NewReader("\n"))
+
+	if err := run("apply"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(tgt, ".testfile")); err == nil {
+		t.Fatal("file should not have been created with empty confirmation")
+	}
+	if !strings.Contains(stderr.String(), "Aborted") {
+		t.Errorf("stderr = %q, want 'Aborted'", stderr.String())
+	}
+}
+
+func TestApplyCmd_ConfirmEOF(t *testing.T) {
+	t.Parallel()
+	src := t.TempDir()
+	tgt := t.TempDir()
+	writeTestScript(t, src)
+
+	_, stderr, run := testCmdDirsWithStdin(src, tgt, strings.NewReader(""))
+
+	if err := run("apply"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(tgt, ".testfile")); err == nil {
+		t.Fatal("file should not have been created on EOF")
+	}
+	if !strings.Contains(stderr.String(), "Aborted") {
+		t.Errorf("stderr = %q, want 'Aborted'", stderr.String())
 	}
 }

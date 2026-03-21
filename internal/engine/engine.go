@@ -161,7 +161,12 @@ func (e *Engine) Apply(ctx context.Context) (action.PlanResult, error) {
 	if err != nil {
 		return action.PlanResult{}, err
 	}
+	return e.ApplyResult(ctx, result)
+}
 
+// ApplyResult executes a pre-computed PlanResult, applying all actions.
+// Use this when you've already called Plan and want to apply without re-planning.
+func (e *Engine) ApplyResult(ctx context.Context, result action.PlanResult) (action.PlanResult, error) {
 	// Pre-acquire sudo credentials if any action needs privilege escalation.
 	if needsSudo(result.Actions) {
 		e.logger.Info("pre-acquiring sudo credentials")
