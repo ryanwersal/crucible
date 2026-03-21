@@ -42,7 +42,7 @@ func (MiseToolHandler) PlanBatch(ctx context.Context, store *fact.Store, env Env
 	var out PlanOutput
 	for _, tool := range tools {
 		if !hasAction[tool.Name] {
-			msg := fmt.Sprintf("mise %s (installed)", tool.Name)
+			msg := fmt.Sprintf("mise %s@%s (installed)", tool.Name, tool.Version)
 			if tool.Absent {
 				msg = fmt.Sprintf("mise %s (already absent)", tool.Name)
 			}

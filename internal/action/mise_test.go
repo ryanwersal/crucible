@@ -1,6 +1,7 @@
 package action
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ryanwersal/crucible/internal/fact"
@@ -10,11 +11,12 @@ func TestDiffMise(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
-		desired     []DesiredMiseTool
-		actual      *fact.MiseInfo
-		wantActions int
-		wantErr     bool
+		name            string
+		desired         []DesiredMiseTool
+		actual          *fact.MiseInfo
+		wantActions     int
+		wantErr         bool
+		wantDescContain string
 	}{
 		{
 			name:    "mise not available",
@@ -29,11 +31,11 @@ func TestDiffMise(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "tool already installed",
+			name:    "tool at correct version",
 			desired: []DesiredMiseTool{{Name: "python", Version: "3.12"}},
 			actual: &fact.MiseInfo{
 				Available: true,
-				Globals:   map[string]bool{"python": true},
+				Globals:   map[string]string{"python": "3.12"},
 			},
 			wantActions: 0,
 		},
@@ -42,9 +44,19 @@ func TestDiffMise(t *testing.T) {
 			desired: []DesiredMiseTool{{Name: "python", Version: "3.12"}},
 			actual: &fact.MiseInfo{
 				Available: true,
-				Globals:   map[string]bool{},
+				Globals:   map[string]string{},
 			},
 			wantActions: 1,
+		},
+		{
+			name:    "tool at wrong version",
+			desired: []DesiredMiseTool{{Name: "python", Version: "3.12"}},
+			actual: &fact.MiseInfo{
+				Available: true,
+				Globals:   map[string]string{"python": "3.11"},
+			},
+			wantActions:     1,
+			wantDescContain: "3.11 → 3.12",
 		},
 		{
 			name: "mixed installed and missing",
@@ -54,7 +66,7 @@ func TestDiffMise(t *testing.T) {
 			},
 			actual: &fact.MiseInfo{
 				Available: true,
-				Globals:   map[string]bool{"python": true},
+				Globals:   map[string]string{"python": "3.12"},
 			},
 			wantActions: 1,
 		},
@@ -63,7 +75,7 @@ func TestDiffMise(t *testing.T) {
 			desired: []DesiredMiseTool{{Name: "python", Absent: true}},
 			actual: &fact.MiseInfo{
 				Available: true,
-				Globals:   map[string]bool{"python": true},
+				Globals:   map[string]string{"python": "3.12"},
 			},
 			wantActions: 1,
 		},
@@ -72,7 +84,7 @@ func TestDiffMise(t *testing.T) {
 			desired: []DesiredMiseTool{{Name: "python", Absent: true}},
 			actual: &fact.MiseInfo{
 				Available: true,
-				Globals:   map[string]bool{},
+				Globals:   map[string]string{},
 			},
 			wantActions: 0,
 		},
@@ -97,6 +109,11 @@ func TestDiffMise(t *testing.T) {
 			for _, a := range actions {
 				if a.Type != InstallMiseTool && a.Type != UninstallMiseTool {
 					t.Errorf("expected InstallMiseTool or UninstallMiseTool, got %s", a.Type)
+				}
+			}
+			if tt.wantDescContain != "" && tt.wantActions > 0 {
+				if !strings.Contains(actions[0].Description, tt.wantDescContain) {
+					t.Errorf("description %q should contain %q", actions[0].Description, tt.wantDescContain)
 				}
 			}
 		})

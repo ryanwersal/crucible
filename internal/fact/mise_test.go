@@ -10,17 +10,17 @@ func TestParseMiseLsOutput(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
-		expected map[string]bool
+		expected map[string]string
 	}{
 		{
 			name:     "empty output",
 			input:    "",
-			expected: map[string]bool{},
+			expected: map[string]string{},
 		},
 		{
 			name:     "single tool",
 			input:    "python  3.12.0  ~/.config/mise/config.toml\n",
-			expected: map[string]bool{"python": true},
+			expected: map[string]string{"python": "3.12.0"},
 		},
 		{
 			name: "multiple tools",
@@ -28,12 +28,17 @@ func TestParseMiseLsOutput(t *testing.T) {
 python  3.12.0  ~/.config/mise/config.toml
 go      1.23.0  ~/.config/mise/config.toml
 `,
-			expected: map[string]bool{"node": true, "python": true, "go": true},
+			expected: map[string]string{"node": "22.0.0", "python": "3.12.0", "go": "1.23.0"},
 		},
 		{
 			name:     "whitespace lines",
 			input:    "\n  \n  python  3.12.0\n  \n",
-			expected: map[string]bool{"python": true},
+			expected: map[string]string{"python": "3.12.0"},
+		},
+		{
+			name:     "line with only tool name and no version",
+			input:    "python\n",
+			expected: map[string]string{},
 		},
 	}
 
@@ -44,9 +49,12 @@ go      1.23.0  ~/.config/mise/config.toml
 			if len(got) != len(tt.expected) {
 				t.Fatalf("got %d tools, want %d: %v", len(got), len(tt.expected), got)
 			}
-			for k := range tt.expected {
-				if !got[k] {
+			for k, wantVer := range tt.expected {
+				gotVer, ok := got[k]
+				if !ok {
 					t.Errorf("missing tool %q", k)
+				} else if gotVer != wantVer {
+					t.Errorf("tool %q: got version %q, want %q", k, gotVer, wantVer)
 				}
 			}
 		})

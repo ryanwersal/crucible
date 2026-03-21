@@ -14,7 +14,7 @@ type DesiredMiseTool struct {
 }
 
 // DiffMise compares desired mise tools against the currently installed set
-// and returns actions for any that are missing.
+// and returns actions for any that need installation, upgrade, or removal.
 func DiffMise(desired []DesiredMiseTool, actual *fact.MiseInfo) ([]Action, error) {
 	if actual == nil || !actual.Available {
 		return nil, fmt.Errorf("mise is not available")
@@ -22,7 +22,7 @@ func DiffMise(desired []DesiredMiseTool, actual *fact.MiseInfo) ([]Action, error
 
 	var actions []Action
 	for _, d := range desired {
-		installed := actual.Globals[d.Name]
+		installedVersion, installed := actual.Globals[d.Name]
 		if d.Absent {
 			if installed {
 				actions = append(actions, Action{
@@ -39,6 +39,13 @@ func DiffMise(desired []DesiredMiseTool, actual *fact.MiseInfo) ([]Action, error
 				MiseToolName:    d.Name,
 				MiseToolVersion: d.Version,
 				Description:     fmt.Sprintf("mise use --global %s@%s", d.Name, d.Version),
+			})
+		} else if installedVersion != d.Version {
+			actions = append(actions, Action{
+				Type:            InstallMiseTool,
+				MiseToolName:    d.Name,
+				MiseToolVersion: d.Version,
+				Description:     fmt.Sprintf("mise use --global %s@%s (%s → %s)", d.Name, d.Version, installedVersion, d.Version),
 			})
 		}
 	}
