@@ -117,6 +117,7 @@ After reviewing individual files, look at the change as a whole:
 
 - **Consistency**: Do the changes follow patterns established elsewhere in the codebase? Use Grep to find similar code.
 - **Missing pieces**: Are there files that *should* have been changed but weren't? (e.g., tests for new code, config updates for new features)
+- **Reference docs**: If any new declaration or action types were added, verify that `internal/reference/reference.go` has corresponding entries in `jsAPI`, `declTypeDescriptions`, and `actionTypeDescriptions`. The `crucible reference` command must always reflect the full API surface.
 - **Dependency impact**: Do changes to internal packages affect other consumers? Grep for imports of changed packages.
 
 ## Step 5: Fix and report

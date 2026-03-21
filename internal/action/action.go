@@ -28,6 +28,8 @@ const (
 	UninstallMiseTool
 	DeleteDefaults
 	InstallMasApp
+	SetKeyRemap
+	RemoveKeyRemap
 )
 
 var typeNames = map[Type]string{}
@@ -67,9 +69,10 @@ type Action struct {
 	MiseToolVersion   string       // InstallMiseTool
 	ShellPath         string       // SetShell
 	ShellUsername     string       // SetShell
-	MasAppID          int64        // InstallMasApp
-	MasAppName        string       // InstallMasApp
-	NeedsSudo         bool         // action requires privilege escalation
+	MasAppID          int64            // InstallMasApp
+	MasAppName        string           // InstallMasApp
+	KeyRemaps         []KeyRemapEntry  // SetKeyRemap
+	NeedsSudo         bool             // action requires privilege escalation
 }
 
 // AllTypes returns every registered action Type, sorted by ordinal.
@@ -80,6 +83,12 @@ func AllTypes() []Type {
 	}
 	slices.SortFunc(types, cmp.Compare)
 	return types
+}
+
+// KeyRemapEntry describes a single key remapping (from → to).
+type KeyRemapEntry struct {
+	From string
+	To   string
 }
 
 // DockFolder describes a folder entry in the Dock.

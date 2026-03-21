@@ -207,6 +207,22 @@ Examples:
   c.shell("/opt/homebrew/bin/zsh")
   c.shell("/opt/homebrew/bin/zsh", { user: "ryan" })
 
+## c.keyRemap(options)
+
+Declare keyboard modifier key remappings for all keyboards via hidutil.
+Object keys are "from" keys, values are "to" keys.
+A LaunchAgent plist is written for persistence across reboots.
+
+Supported key names: capsLock, control, leftControl, rightControl,
+leftShift, rightShift, leftOption, rightOption, leftCommand, rightCommand, fn.
+
+Note: "control" is an alias for "leftControl".
+
+Examples:
+  c.keyRemap({ capsLock: "control" })
+  c.keyRemap({ capsLock: "control", control: "capsLock" })
+  c.keyRemap({ state: "absent" })
+
 ## c.log(message)
 
 Log a message during script evaluation. Does not create a declaration.
@@ -327,6 +343,7 @@ var declTypeDescriptions = map[decl.Type]string{
 	decl.MiseTool: "Mise tool — globally installed version manager tool",
 	decl.Shell:    "Login shell — sets the user's default shell",
 	decl.MasApp:   "Mac App Store app — installed via mas",
+	decl.KeyRemap: "Keyboard modifier remap — applied globally via hidutil with LaunchAgent persistence",
 }
 
 func writeDeclTypes(b *strings.Builder, reg *resource.Registry) {
@@ -361,6 +378,8 @@ var actionTypeDescriptions = map[action.Type]string{
 	action.UninstallMiseTool: "Uninstall a mise tool",
 	action.DeleteDefaults:    "Delete a macOS defaults key",
 	action.InstallMasApp:     "Install a Mac App Store app",
+	action.SetKeyRemap:       "Apply keyboard modifier remappings via hidutil and write LaunchAgent",
+	action.RemoveKeyRemap:    "Clear keyboard modifier remappings and remove LaunchAgent",
 }
 
 func writeActionTypes(b *strings.Builder, reg *resource.Registry) {

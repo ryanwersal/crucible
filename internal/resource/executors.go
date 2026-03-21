@@ -2,14 +2,18 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/ryanwersal/crucible/internal/action"
 	"github.com/ryanwersal/crucible/internal/action/dock"
+	"github.com/ryanwersal/crucible/internal/script/decl"
 )
 
 // buildCmd creates an exec.Cmd, prepending sudo when a.NeedsSudo is true.
@@ -284,4 +288,101 @@ func (InstallMasAppExecutor) ActionName() string      { return "InstallMasApp" }
 func (InstallMasAppExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
 	id := fmt.Sprintf("%d", a.MasAppID)
 	return buildCmd(ctx, a, stdin, stdout, stderr, "mas", "install", id).Run()
+}
+
+// SetKeyRemapExecutor applies keyboard modifier remappings via hidutil
+// and writes a LaunchAgent plist for persistence across reboots.
+type SetKeyRemapExecutor struct{}
+
+func (SetKeyRemapExecutor) ActionType() action.Type { return action.SetKeyRemap }
+func (SetKeyRemapExecutor) ActionName() string      { return "SetKeyRemap" }
+
+func (SetKeyRemapExecutor) Execute(ctx context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
+	mappingJSON := buildUserKeyMappingJSON(a.KeyRemaps)
+
+	// Apply immediately via hidutil.
+	cmd := exec.CommandContext(ctx, "hidutil", "property", "--set", mappingJSON)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("hidutil property --set: %w", err)
+	}
+
+	// Write LaunchAgent plist for persistence.
+	plist := buildKeyRemapPlist(a.KeyRemaps)
+	dir := filepath.Dir(a.Path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("creating LaunchAgents directory: %w", err)
+	}
+	if err := os.WriteFile(a.Path, []byte(plist), 0o644); err != nil {
+		return fmt.Errorf("writing LaunchAgent plist: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveKeyRemapExecutor clears keyboard modifier remappings and removes the LaunchAgent.
+type RemoveKeyRemapExecutor struct{}
+
+func (RemoveKeyRemapExecutor) ActionType() action.Type { return action.RemoveKeyRemap }
+func (RemoveKeyRemapExecutor) ActionName() string      { return "RemoveKeyRemap" }
+
+func (RemoveKeyRemapExecutor) Execute(ctx context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
+	// Clear live remappings.
+	cmd := exec.CommandContext(ctx, "hidutil", "property", "--set", `{"UserKeyMapping":[]}`)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("hidutil property --set (clear): %w", err)
+	}
+
+	// Remove LaunchAgent plist if it exists.
+	if err := os.Remove(a.Path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("removing LaunchAgent plist: %w", err)
+	}
+
+	return nil
+}
+
+// buildUserKeyMappingJSON builds the JSON string for hidutil --set.
+func buildUserKeyMappingJSON(remaps []action.KeyRemapEntry) string {
+	entries := make([]string, 0, len(remaps))
+	for _, r := range remaps {
+		src, _ := decl.KeyCode(r.From)
+		dst, _ := decl.KeyCode(r.To)
+		entries = append(entries, fmt.Sprintf(`{"HIDKeyboardModifierMappingSrc":%d,"HIDKeyboardModifierMappingDst":%d}`, src, dst))
+	}
+	return fmt.Sprintf(`{"UserKeyMapping":[%s]}`, strings.Join(entries, ","))
+}
+
+// buildKeyRemapPlist generates a launchd plist that runs hidutil at login.
+func buildKeyRemapPlist(remaps []action.KeyRemapEntry) string {
+	mappingJSON := buildUserKeyMappingJSON(remaps)
+	escaped := xmlEscape(mappingJSON)
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.crucible.keyremap</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/bin/hidutil</string>
+		<string>property</string>
+		<string>--set</string>
+		<string>%s</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+</dict>
+</plist>
+`, escaped)
+}
+
+// xmlEscape escapes special XML characters in a string.
+func xmlEscape(s string) string {
+	r := strings.NewReplacer(
+		"&", "&amp;",
+		"<", "&lt;",
+		">", "&gt;",
+		"\"", "&quot;",
+		"'", "&apos;",
+	)
+	return r.Replace(s)
 }

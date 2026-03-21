@@ -30,6 +30,7 @@ const (
 	MiseTool
 	Shell
 	MasApp
+	KeyRemap
 )
 
 var typeNames = map[Type]string{}
@@ -73,6 +74,7 @@ type Declaration struct {
 	ShellUsername   string         // Shell
 	MasAppID        int64          // MasApp
 	MasAppName      string         // MasApp
+	KeyRemaps       []KeyRemapEntry // KeyRemap
 }
 
 // AllTypes returns every registered declaration Type, sorted by ordinal.
@@ -83,6 +85,50 @@ func AllTypes() []Type {
 	}
 	slices.SortFunc(types, cmp.Compare)
 	return types
+}
+
+// KeyRemapEntry describes a single key remapping (from → to).
+type KeyRemapEntry struct {
+	From string
+	To   string
+}
+
+// hidKeyCodes maps human-readable key names to HID usage page key codes.
+// These are USB HID usage codes with the 0x700000000 usage page prefix.
+var hidKeyCodes = map[string]uint64{
+	"capsLock":     0x700000039,
+	"control":      0x7000000E0,
+	"leftControl":  0x7000000E0,
+	"rightControl": 0x7000000E4,
+	"leftShift":    0x7000000E1,
+	"rightShift":   0x7000000E5,
+	"leftOption":   0x7000000E2,
+	"rightOption":  0x7000000E6,
+	"leftCommand":  0x7000000E3,
+	"rightCommand": 0x7000000E7,
+	"fn":           0xFF00000003,
+}
+
+// ValidKeyName reports whether name is a recognized key name for remapping.
+func ValidKeyName(name string) bool {
+	_, ok := hidKeyCodes[name]
+	return ok
+}
+
+// KeyCode returns the HID usage code for the given key name.
+func KeyCode(name string) (uint64, bool) {
+	code, ok := hidKeyCodes[name]
+	return code, ok
+}
+
+// ValidKeyNames returns all recognized key names, sorted.
+func ValidKeyNames() []string {
+	names := make([]string, 0, len(hidKeyCodes))
+	for name := range hidKeyCodes {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names
 }
 
 // DockFolder describes a folder entry in the Dock declaration.

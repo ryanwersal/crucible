@@ -47,6 +47,7 @@ func (m *CrucibleModule) Export(facts *FactsModule) *goja.Object {
 	_ = obj.Set("mas", m.mas)
 	_ = obj.Set("mise", m.mise)
 	_ = obj.Set("shell", m.shell)
+	_ = obj.Set("keyRemap", m.keyRemap)
 	_ = obj.Set("log", m.log)
 	if facts != nil {
 		_ = obj.Set("facts", facts.Export())
@@ -562,6 +563,56 @@ func (m *CrucibleModule) shell(call goja.FunctionCall) goja.Value {
 		Type:          decl.Shell,
 		ShellPath:     shellPath,
 		ShellUsername: username,
+	})
+
+	return goja.Undefined()
+}
+
+// keyRemap declares keyboard modifier key remappings for all keyboards.
+// Usage: c.keyRemap({ capsLock: "control" })
+//
+//	c.keyRemap({ capsLock: "control", control: "capsLock" })
+//	c.keyRemap({ state: "absent" })
+func (m *CrucibleModule) keyRemap(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		panic(m.vm.NewGoError(fmt.Errorf("keyRemap() requires an options object")))
+	}
+
+	opts := call.Arguments[0].ToObject(m.vm)
+
+	if m.isAbsent(opts) {
+		*m.declarations = append(*m.declarations, decl.Declaration{
+			Type:  decl.KeyRemap,
+			State: decl.Absent,
+		})
+		return goja.Undefined()
+	}
+
+	var remaps []decl.KeyRemapEntry
+	for _, key := range opts.Keys() {
+		if key == "state" {
+			continue
+		}
+		if !decl.ValidKeyName(key) {
+			panic(m.vm.NewGoError(fmt.Errorf("keyRemap(): unknown key name %q; valid names: %s",
+				key, strings.Join(decl.ValidKeyNames(), ", "))))
+		}
+		toVal := opts.Get(key)
+		toName := toVal.String()
+		if !decl.ValidKeyName(toName) {
+			panic(m.vm.NewGoError(fmt.Errorf("keyRemap(): unknown key name %q for value of %q; valid names: %s",
+				toName, key, strings.Join(decl.ValidKeyNames(), ", "))))
+		}
+		remaps = append(remaps, decl.KeyRemapEntry{From: key, To: toName})
+	}
+
+	if len(remaps) == 0 {
+		panic(m.vm.NewGoError(fmt.Errorf("keyRemap() requires at least one key mapping")))
+	}
+
+	*m.declarations = append(*m.declarations, decl.Declaration{
+		Type:      decl.KeyRemap,
+		KeyRemaps: remaps,
 	})
 
 	return goja.Undefined()

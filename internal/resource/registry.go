@@ -153,6 +153,7 @@ func newDefaultRegistry() *Registry {
 	r.RegisterHandler(DockHandler{})
 	r.RegisterHandler(GitRepoHandler{})
 	r.RegisterHandler(ShellHandler{})
+	r.RegisterHandler(KeyRemapHandler{})
 
 	// Batch handlers
 	r.RegisterBatchHandler(PackageHandler{})
@@ -178,6 +179,8 @@ func newDefaultRegistry() *Registry {
 	r.RegisterExecutor(UninstallMiseToolExecutor{})
 	r.RegisterExecutor(SetShellExecutor{})
 	r.RegisterExecutor(InstallMasAppExecutor{})
+	r.RegisterExecutor(SetKeyRemapExecutor{})
+	r.RegisterExecutor(RemoveKeyRemapExecutor{})
 
 	return r
 }
