@@ -398,7 +398,8 @@ func (SetDisplayExecutor) Execute(ctx context.Context, a action.Action, _ io.Rea
 	}
 
 	// Set menu bar spacing via currentHost defaults.
-	if a.DisplayMenuBarSpacing == "compact" {
+	switch a.DisplayMenuBarSpacing {
+	case "compact":
 		cmd := exec.CommandContext(ctx, "defaults", "-currentHost", "write", "-globalDomain", "NSStatusItemSpacing", "-int", "6")
 		cmd.Stderr = stderr
 		if err := cmd.Run(); err != nil {
@@ -409,7 +410,7 @@ func (SetDisplayExecutor) Execute(ctx context.Context, a action.Action, _ io.Rea
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("setting menu bar padding: %w", err)
 		}
-	} else if a.DisplayMenuBarSpacing == "default" {
+	case "default":
 		// Remove custom spacing to restore macOS defaults.
 		// Deletion fails if the keys don't exist, which is expected and harmless.
 		if err := exec.CommandContext(ctx, "defaults", "-currentHost", "delete", "-globalDomain", "NSStatusItemSpacing").Run(); err != nil {

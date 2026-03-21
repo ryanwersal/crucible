@@ -37,17 +37,16 @@ func DiffDisplay(desired DesiredDisplay, actual *fact.DisplayInfo) []Action {
 	}
 
 	// Check menu bar spacing.
-	if desired.MenuBarSpacing != "" {
-		if desired.MenuBarSpacing == "compact" {
-			// Compact: NSStatusItemSpacing=6, NSStatusItemSelectionPadding=4
-			if actual.MenuBarSpacing != 6 || actual.MenuBarPadding != 4 {
-				diffs = append(diffs, "menu bar spacing → compact")
-			}
-		} else if desired.MenuBarSpacing == "default" {
-			// Default: keys should not exist (values are -1 when unset)
-			if actual.MenuBarSpacing != -1 || actual.MenuBarPadding != -1 {
-				diffs = append(diffs, "menu bar spacing → default")
-			}
+	switch desired.MenuBarSpacing {
+	case "compact":
+		// Compact: NSStatusItemSpacing=6, NSStatusItemSelectionPadding=4
+		if actual.MenuBarSpacing != 6 || actual.MenuBarPadding != 4 {
+			diffs = append(diffs, "menu bar spacing → compact")
+		}
+	case "default":
+		// Default: keys should not exist (values are -1 when unset)
+		if actual.MenuBarSpacing != -1 || actual.MenuBarPadding != -1 {
+			diffs = append(diffs, "menu bar spacing → default")
 		}
 	}
 
