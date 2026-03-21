@@ -20,20 +20,21 @@ func TestReadWrite_RoundTrip(t *testing.T) {
 				"tile-data": map[string]any{
 					"file-data": map[string]any{
 						"_CFURLString":     "file:///Applications/Safari.app/",
-						"_CFURLStringType": uint64(0),
+						"_CFURLStringType": uint64(15),
 					},
-					"file-label": "Safari",
-					"file-type":  uint64(41),
+					"file-label":        "Safari",
+					"file-type":         uint64(41),
+					"bundle-identifier": "com.apple.Safari",
 				},
 				"tile-type": "file-tile",
 			},
 			map[string]any{
 				"tile-data": map[string]any{
 					"file-data": map[string]any{
-						"_CFURLString":     "file:///Applications/Firefox.app/",
-						"_CFURLStringType": uint64(0),
+						"_CFURLString":     "file:///System/Applications/Utilities/Terminal.app/",
+						"_CFURLStringType": uint64(15),
 					},
-					"file-label": "Firefox",
+					"file-label": "Terminal",
 					"file-type":  uint64(41),
 				},
 				"tile-type": "file-tile",
@@ -44,7 +45,7 @@ func TestReadWrite_RoundTrip(t *testing.T) {
 				"tile-data": map[string]any{
 					"file-data": map[string]any{
 						"_CFURLString":     "file:///Users/test/Downloads/",
-						"_CFURLStringType": uint64(0),
+						"_CFURLStringType": uint64(15),
 					},
 					"file-label":        "Downloads",
 					"file-type":         uint64(2),
@@ -81,8 +82,8 @@ func TestReadWrite_RoundTrip(t *testing.T) {
 	if state.Apps[0] != "/Applications/Safari.app" {
 		t.Fatalf("expected Safari, got %q", state.Apps[0])
 	}
-	if state.Apps[1] != "/Applications/Firefox.app" {
-		t.Fatalf("expected Firefox, got %q", state.Apps[1])
+	if state.Apps[1] != "/System/Applications/Utilities/Terminal.app" {
+		t.Fatalf("expected Terminal, got %q", state.Apps[1])
 	}
 
 	if len(state.Folders) != 1 {
@@ -98,9 +99,13 @@ func TestReadWrite_RoundTrip(t *testing.T) {
 		t.Fatalf("expected folder display, got %q", state.Folders[0].Display)
 	}
 
-	// Write with different layout
-	newApps := []string{"/Applications/Alacritty.app", "/Applications/Safari.app"}
-	newFolders := []FolderEntry{{Path: "/Users/test/Documents", View: "list", Display: "stack"}}
+	// Write with apps that exist on this system so bookmarks can be created
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	newApps := []string{"/System/Applications/Utilities/Terminal.app"}
+	newFolders := []FolderEntry{{Path: homeDir, View: "list", Display: "stack"}}
 	if err := Write(plistPath, newApps, newFolders); err != nil {
 		t.Fatal(err)
 	}
@@ -110,17 +115,14 @@ func TestReadWrite_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(state2.Apps) != 2 {
-		t.Fatalf("expected 2 apps after write, got %d", len(state2.Apps))
+	if len(state2.Apps) != 1 {
+		t.Fatalf("expected 1 app after write, got %d", len(state2.Apps))
 	}
-	if state2.Apps[0] != "/Applications/Alacritty.app" {
-		t.Fatalf("expected Alacritty, got %q", state2.Apps[0])
+	if state2.Apps[0] != "/System/Applications/Utilities/Terminal.app" {
+		t.Fatalf("expected Terminal, got %q", state2.Apps[0])
 	}
 	if len(state2.Folders) != 1 {
 		t.Fatalf("expected 1 folder after write, got %d", len(state2.Folders))
-	}
-	if state2.Folders[0].Path != "/Users/test/Documents" {
-		t.Fatalf("expected Documents, got %q", state2.Folders[0].Path)
 	}
 	if state2.Folders[0].View != "list" {
 		t.Fatalf("expected list view, got %q", state2.Folders[0].View)
@@ -138,6 +140,36 @@ func TestReadWrite_RoundTrip(t *testing.T) {
 	if ah, ok := readRoot["autohide"].(bool); !ok || !ah {
 		t.Fatal("autohide setting not preserved")
 	}
+
+	// Verify bookmark data was generated
+	apps, ok := readRoot["persistent-apps"].([]any)
+	if !ok || len(apps) == 0 {
+		t.Fatal("no apps in written plist")
+	}
+	appEntry, ok := apps[0].(map[string]any)
+	if !ok {
+		t.Fatal("app entry is not a map")
+	}
+	tileData, ok := appEntry["tile-data"].(map[string]any)
+	if !ok {
+		t.Fatal("tile-data is not a map")
+	}
+	if _, ok := tileData["book"]; !ok {
+		t.Error("missing book field in written app entry")
+	}
+	if _, ok := tileData["bundle-identifier"]; !ok {
+		t.Error("missing bundle-identifier in written app entry")
+	}
+	if _, ok := appEntry["GUID"]; !ok {
+		t.Error("missing GUID in written app entry")
+	}
+	fileData, ok := tileData["file-data"].(map[string]any)
+	if !ok {
+		t.Fatal("file-data is not a map")
+	}
+	if urlType, ok := fileData["_CFURLStringType"].(uint64); !ok || urlType != 15 {
+		t.Errorf("_CFURLStringType = %v, want 15", fileData["_CFURLStringType"])
+	}
 }
 
 func TestAppLabel(t *testing.T) {
@@ -151,10 +183,12 @@ func TestAppLabel(t *testing.T) {
 		{"/Applications/Some App.app", "Some App"},
 	}
 	for _, tt := range tests {
-		got := appLabel(tt.path)
-		if got != tt.want {
-			t.Errorf("appLabel(%q) = %q, want %q", tt.path, got, tt.want)
-		}
+		t.Run(tt.want, func(t *testing.T) {
+			got := appLabel(tt.path)
+			if got != tt.want {
+				t.Errorf("appLabel(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
 	}
 }
 

@@ -2,6 +2,8 @@ package dock
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"os/exec"
@@ -42,7 +44,8 @@ func Read(path string) (*PlistState, error) {
 }
 
 // Write updates a dock plist file with the desired app and folder layout,
-// preserving all other dock settings.
+// preserving all other dock settings. Each entry includes a security-scoped
+// bookmark, bundle identifier, and GUID so that macOS can resolve app icons.
 func Write(path string, apps []string, folders []FolderEntry) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -54,8 +57,17 @@ func Write(path string, apps []string, folders []FolderEntry) error {
 		return fmt.Errorf("unmarshal dock plist: %w", err)
 	}
 
-	root["persistent-apps"] = buildAppEntries(apps)
-	root["persistent-others"] = buildFolderEntries(folders)
+	appEntries, err := buildAppEntries(apps)
+	if err != nil {
+		return fmt.Errorf("build app entries: %w", err)
+	}
+	folderEntries, err := buildFolderEntries(folders)
+	if err != nil {
+		return fmt.Errorf("build folder entries: %w", err)
+	}
+
+	root["persistent-apps"] = appEntries
+	root["persistent-others"] = folderEntries
 
 	out, err := plist.Marshal(root, plist.BinaryFormat)
 	if err != nil {
@@ -74,13 +86,100 @@ func RestartDock(ctx context.Context) error {
 	return exec.CommandContext(ctx, "killall", "Dock").Run()
 }
 
+func buildAppEntries(apps []string) ([]any, error) {
+	entries := make([]any, len(apps))
+	for i, app := range apps {
+		bookmark, err := CreateBookmark(app)
+		if err != nil {
+			return nil, fmt.Errorf("bookmark %s: %w", app, err)
+		}
+
+		tileData := map[string]any{
+			"file-data": map[string]any{
+				"_CFURLString":     "file://" + app + "/",
+				"_CFURLStringType": uint64(15),
+			},
+			"file-label":      appLabel(app),
+			"file-type":       uint64(41),
+			"book":            bookmark,
+			"dock-extra":      false,
+			"is-beta":         false,
+			"file-mod-date":   uint64(0),
+			"parent-mod-date": uint64(0),
+		}
+
+		if bid := BundleIdentifier(app); bid != "" {
+			tileData["bundle-identifier"] = bid
+		}
+
+		entries[i] = map[string]any{
+			"GUID":      randGUID(),
+			"tile-data": tileData,
+			"tile-type": "file-tile",
+		}
+	}
+	return entries, nil
+}
+
+func buildFolderEntries(folders []FolderEntry) ([]any, error) {
+	entries := make([]any, len(folders))
+	for i, f := range folders {
+		bookmark, err := CreateBookmark(f.Path)
+		if err != nil {
+			return nil, fmt.Errorf("bookmark %s: %w", f.Path, err)
+		}
+
+		entries[i] = map[string]any{
+			"GUID": randGUID(),
+			"tile-data": map[string]any{
+				"file-data": map[string]any{
+					"_CFURLString":     "file://" + f.Path + "/",
+					"_CFURLStringType": uint64(15),
+				},
+				"file-label":        folderLabel(f.Path),
+				"file-type":         uint64(2),
+				"book":              bookmark,
+				"showas":            viewToShowAs(f.View),
+				"displayas":         displayToDisplayAs(f.Display),
+				"arrangement":       uint64(1),
+				"preferreditemsize": ^uint64(0),
+			},
+			"tile-type": "directory-tile",
+		}
+	}
+	return entries, nil
+}
+
+// randGUID generates a random uint64 for dock entry GUIDs.
+func randGUID() uint64 {
+	var buf [8]byte
+	_, _ = rand.Read(buf[:])
+	return binary.LittleEndian.Uint64(buf[:])
+}
+
+func appLabel(path string) string {
+	// "/Applications/Firefox.app" → "Firefox"
+	base := path
+	if i := strings.LastIndex(base, "/"); i >= 0 {
+		base = base[i+1:]
+	}
+	return strings.TrimSuffix(base, ".app")
+}
+
+func folderLabel(path string) string {
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		return path[i+1:]
+	}
+	return path
+}
+
 func extractApps(root map[string]any) []string {
 	apps, ok := root["persistent-apps"].([]any)
 	if !ok {
 		return nil
 	}
 
-	var paths []string
+	paths := make([]string, 0, len(apps))
 	for _, item := range apps {
 		entry, ok := item.(map[string]any)
 		if !ok {
@@ -98,9 +197,7 @@ func extractApps(root map[string]any) []string {
 		if !ok {
 			continue
 		}
-		// Strip file:// prefix if present
 		urlStr = strings.TrimPrefix(urlStr, "file://")
-		// Trim trailing slash
 		urlStr = strings.TrimRight(urlStr, "/")
 		paths = append(paths, urlStr)
 	}
@@ -113,7 +210,7 @@ func extractFolders(root map[string]any) []FolderEntry {
 		return nil
 	}
 
-	var folders []FolderEntry
+	folders := make([]FolderEntry, 0, len(others))
 	for _, item := range others {
 		entry, ok := item.(map[string]any)
 		if !ok {
@@ -146,62 +243,6 @@ func extractFolders(root map[string]any) []FolderEntry {
 		folders = append(folders, folder)
 	}
 	return folders
-}
-
-func buildAppEntries(apps []string) []any {
-	entries := make([]any, len(apps))
-	for i, app := range apps {
-		entries[i] = map[string]any{
-			"tile-data": map[string]any{
-				"file-data": map[string]any{
-					"_CFURLString":     "file://" + app + "/",
-					"_CFURLStringType": uint64(0),
-				},
-				"file-label": appLabel(app),
-				"file-type":  uint64(41),
-			},
-			"tile-type": "file-tile",
-		}
-	}
-	return entries
-}
-
-func buildFolderEntries(folders []FolderEntry) []any {
-	entries := make([]any, len(folders))
-	for i, f := range folders {
-		entries[i] = map[string]any{
-			"tile-data": map[string]any{
-				"file-data": map[string]any{
-					"_CFURLString":     "file://" + f.Path + "/",
-					"_CFURLStringType": uint64(0),
-				},
-				"file-label":        folderLabel(f.Path),
-				"file-type":         uint64(2),
-				"showas":            viewToShowAs(f.View),
-				"displayas":         displayToDisplayAs(f.Display),
-				"arrangement":       uint64(1),
-				"preferreditemsize": ^uint64(0),
-			},
-			"tile-type": "directory-tile",
-		}
-	}
-	return entries
-}
-
-func appLabel(path string) string {
-	// "/Applications/Firefox.app" → "Firefox"
-	base := path
-	if i := strings.LastIndex(base, "/"); i >= 0 {
-		base = base[i+1:]
-	}
-	return strings.TrimSuffix(base, ".app")
-}
-
-func folderLabel(path string) string {
-	if i := strings.LastIndex(path, "/"); i >= 0 {
-		return path[i+1:]
-	}
-	return path
 }
 
 func viewToShowAs(view string) uint64 {
