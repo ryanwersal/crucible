@@ -50,7 +50,6 @@ func fetchAll(ctx context.Context, urls []string) ([]Result, error) {
     results := make([]Result, len(urls))
 
     for i, url := range urls {
-        i, url := i, url
         g.Go(func() error {
             r, err := fetch(ctx, url)
             if err != nil {

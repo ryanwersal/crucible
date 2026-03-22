@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -164,9 +165,27 @@ func (e *Engine) Apply(ctx context.Context) (action.PlanResult, error) {
 	return e.ApplyResult(ctx, result)
 }
 
-// ApplyResult executes a pre-computed PlanResult, applying all actions.
+// ApplyResult executes a pre-computed PlanResult sequentially, applying all actions.
 // Use this when you've already called Plan and want to apply without re-planning.
 func (e *Engine) ApplyResult(ctx context.Context, result action.PlanResult) (action.PlanResult, error) {
+	ar, err := e.ApplyResultWithOptions(ctx, result, ApplyOptions{Concurrency: 1})
+	if err != nil {
+		return action.PlanResult{}, err
+	}
+	if errs := ar.Errors(); len(errs) > 0 {
+		first := errs[0]
+		return action.PlanResult{}, fmt.Errorf("action failed (%s): %w", first.Action.Description, first.Err)
+	}
+	return result, nil
+}
+
+// ApplyResultWithOptions executes a pre-computed PlanResult with configurable
+// concurrency and an optional observer for live progress display.
+func (e *Engine) ApplyResultWithOptions(ctx context.Context, result action.PlanResult, opts ApplyOptions) (ApplyResult, error) {
+	if opts.Concurrency <= 0 {
+		opts.Concurrency = 1
+	}
+
 	// Pre-acquire sudo credentials if any action needs privilege escalation.
 	if needsSudo(result.Actions) {
 		e.logger.Info("pre-acquiring sudo credentials")
@@ -175,18 +194,139 @@ func (e *Engine) ApplyResult(ctx context.Context, result action.PlanResult) (act
 		cmd.Stdout = e.stdout
 		cmd.Stderr = e.stderr
 		if err := cmd.Run(); err != nil {
-			return action.PlanResult{}, fmt.Errorf("sudo credential acquisition failed: %w", err)
+			return ApplyResult{}, fmt.Errorf("sudo credential acquisition failed: %w", err)
 		}
 	}
 
+	// Partition actions: SetShell needs stdin and must run sequentially.
+	concurrent := make([]indexedAction, 0, len(result.Actions))
+	var sequential []indexedAction
 	for i, a := range result.Actions {
-		e.logger.Info("executing", "action", a.Type.String(), "description", a.Description)
-		if err := e.registry.Execute(ctx, a, e.stdin, e.stdout, e.stderr); err != nil {
-			return action.PlanResult{}, fmt.Errorf("action %d/%d failed (%s): %w", i+1, len(result.Actions), a.Description, err)
+		if a.Type == action.SetShell {
+			sequential = append(sequential, indexedAction{index: i, action: a})
+		} else {
+			concurrent = append(concurrent, indexedAction{index: i, action: a})
 		}
 	}
 
-	return result, nil
+	results := make([]ActionResult, len(result.Actions))
+
+	// Pre-populate actions so callers always have action metadata in results.
+	for i, a := range result.Actions {
+		results[i] = ActionResult{Action: a}
+	}
+
+	// Run concurrent actions.
+	if len(concurrent) > 0 {
+		e.runConcurrent(ctx, concurrent, results, opts)
+	}
+
+	// Run sequential (stdin-needing) actions.
+	for _, ia := range sequential {
+		if ctx.Err() != nil {
+			break
+		}
+		if opts.Observer != nil {
+			opts.Observer.ActionStarted(ia.index, ia.action)
+		}
+		err := e.registry.Execute(ctx, ia.action, e.stdin, e.stdout, e.stderr)
+		results[ia.index] = ActionResult{Action: ia.action, Err: err}
+		if opts.Observer != nil {
+			opts.Observer.ActionCompleted(ia.index, ia.action, err)
+		}
+	}
+
+	if opts.Observer != nil {
+		opts.Observer.Wait()
+	}
+
+	return ApplyResult{Results: results}, nil
+}
+
+type indexedAction struct {
+	index  int
+	action action.Action
+}
+
+func (e *Engine) runConcurrent(ctx context.Context, actions []indexedAction, results []ActionResult, opts ApplyOptions) {
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(opts.Concurrency)
+
+	for _, ia := range actions {
+		g.Go(func() error {
+			// Short-circuit if context was cancelled while waiting for a slot.
+			if gctx.Err() != nil {
+				return nil
+			}
+
+			if opts.Observer != nil {
+				opts.Observer.ActionStarted(ia.index, ia.action)
+			}
+
+			// Always use per-action writers for concurrent execution to avoid
+			// interleaved output from multiple goroutines sharing a writer.
+			buf := newObserverWriter(ia.index, opts.Observer)
+
+			err := e.registry.Execute(gctx, ia.action, nil, buf, buf)
+			// Safe: each goroutine writes to a distinct index; results is only
+			// read after g.Wait() returns.
+			results[ia.index] = ActionResult{Action: ia.action, Err: err}
+
+			if opts.Observer != nil {
+				opts.Observer.ActionCompleted(ia.index, ia.action, err)
+			}
+			return nil // never return error — we collect them in results
+		})
+	}
+
+	_ = g.Wait()
+}
+
+// observerWriter is an io.Writer that splits output into lines and feeds
+// them to an ActionObserver. It treats both \n and \r as line terminators
+// (the latter for progress bars that use carriage return).
+type observerWriter struct {
+	index    int
+	observer ActionObserver
+	partial  []byte
+}
+
+// maxPartialLen caps the partial line buffer to prevent unbounded growth
+// from output that never emits a newline (e.g. long progress bars).
+const maxPartialLen = 64 * 1024
+
+func newObserverWriter(index int, observer ActionObserver) *observerWriter {
+	return &observerWriter{index: index, observer: observer, partial: make([]byte, 0, 512)}
+}
+
+func (w *observerWriter) Write(p []byte) (int, error) {
+	if w.observer == nil {
+		return len(p), nil
+	}
+	w.partial = append(w.partial, p...)
+	for {
+		nl := bytes.IndexAny(w.partial, "\n\r")
+		if nl < 0 {
+			break
+		}
+		line := string(w.partial[:nl])
+		// Skip empty lines produced by \r\n (the \n after a \r).
+		skip := nl + 1
+		if w.partial[nl] == '\r' && skip < len(w.partial) && w.partial[skip] == '\n' {
+			skip++
+		}
+		w.partial = w.partial[skip:]
+		if len(line) > 0 {
+			w.observer.ActionOutput(w.index, line)
+		}
+	}
+	// Cap partial buffer to prevent unbounded growth from output that never
+	// emits a newline. Truncation may discard the start of a partial line,
+	// so the next emitted line after truncation could be incomplete.
+	if len(w.partial) > maxPartialLen {
+		w.partial = w.partial[len(w.partial)-maxPartialLen:]
+	}
+	return len(p), nil
 }
 
 // needsSudo reports whether any action requires privilege escalation.

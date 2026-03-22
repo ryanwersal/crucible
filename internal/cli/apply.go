@@ -5,19 +5,22 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/ryanwersal/crucible/internal/action"
 	"github.com/ryanwersal/crucible/internal/engine"
+	"github.com/ryanwersal/crucible/internal/ui"
 	"github.com/spf13/cobra"
 )
 
 func newApplyCmd(opts *rootOpts) *cobra.Command {
 	var (
-		dryRun     bool
-		yes        bool
-		scriptFile string
+		dryRun      bool
+		yes         bool
+		scriptFile  string
+		concurrency int
 	)
 
 	cmd := &cobra.Command{
@@ -104,18 +107,44 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 				}
 			}
 
-			result, err = eng.ApplyResult(cmd.Context(), result)
+			// Build observer based on whether stdout is a terminal.
+			var observer engine.ActionObserver
+			if f, ok := w.(*os.File); ok && ui.IsTerminal(f) {
+				r := ui.NewRenderer(f, len(result.Actions), 5)
+				r.Start(cmd.Context())
+				defer r.Wait() // ensure render loop stops and cursor is restored
+				observer = r
+			} else {
+				observer = ui.NewLogObserver(logger)
+			}
+
+			applyResult, err := eng.ApplyResultWithOptions(cmd.Context(), result, engine.ApplyOptions{
+				Concurrency: concurrency,
+				Observer:    observer,
+			})
 			if err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(w, "%d action(s) applied.\n", len(result.Actions))
-			return nil
+
+			// Print summary.
+			succeeded := len(applyResult.Succeeded())
+			errs := applyResult.Errors()
+			if len(errs) == 0 {
+				_, _ = fmt.Fprintf(w, "%d action(s) applied.\n", succeeded)
+				return nil
+			}
+			_, _ = fmt.Fprintf(w, "%d action(s) applied, %d failed.\n", succeeded, len(errs))
+			for _, e := range errs {
+				_, _ = fmt.Fprintf(w, "  ✗ %s: %v\n", e.Action.Description, e.Err)
+			}
+			return fmt.Errorf("%d action(s) failed", len(errs))
 		},
 	}
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be done without making changes")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompt")
 	cmd.Flags().StringVarP(&scriptFile, "file", "f", "", "path to a crucible.js script (default: ./crucible.js)")
+	cmd.Flags().IntVar(&concurrency, "concurrency", 4, "max parallel actions (1 for sequential)")
 	return cmd
 }
 

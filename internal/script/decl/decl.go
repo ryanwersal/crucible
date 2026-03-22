@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"slices"
+	"sync"
 )
 
 // State indicates whether a declaration should be present or absent.
@@ -34,15 +35,15 @@ const (
 	Display
 )
 
-var typeNames = map[Type]string{}
+var typeNames sync.Map
 
 // RegisterName records the human-readable name for a declaration type.
 // Called by the resource registry during handler registration.
-func RegisterName(t Type, name string) { typeNames[t] = name }
+func RegisterName(t Type, name string) { typeNames.Store(t, name) }
 
 func (t Type) String() string {
-	if name, ok := typeNames[t]; ok {
-		return name
+	if name, ok := typeNames.Load(t); ok {
+		return name.(string)
 	}
 	return fmt.Sprintf("decl(%d)", t)
 }
@@ -84,10 +85,11 @@ type Declaration struct {
 
 // AllTypes returns every registered declaration Type, sorted by ordinal.
 func AllTypes() []Type {
-	types := make([]Type, 0, len(typeNames))
-	for t := range typeNames {
-		types = append(types, t)
-	}
+	var types []Type
+	typeNames.Range(func(key, _ any) bool {
+		types = append(types, key.(Type))
+		return true
+	})
 	slices.SortFunc(types, cmp.Compare)
 	return types
 }
