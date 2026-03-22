@@ -513,6 +513,34 @@ func TestObserverWriter_NilObserver(t *testing.T) {
 	}
 }
 
+func TestStampGroup(t *testing.T) {
+	t.Parallel()
+
+	acts := []action.Action{
+		{Description: "no group"},
+		{Description: "has group", Group: "Existing"},
+	}
+	obs := []action.Observation{
+		{Description: "obs no group"},
+		{Description: "obs has group", Group: "Existing"},
+	}
+
+	stampGroup(acts, obs, "Stamped")
+
+	if acts[0].Group != "Stamped" {
+		t.Errorf("acts[0].Group = %q, want Stamped", acts[0].Group)
+	}
+	if acts[1].Group != "Existing" {
+		t.Errorf("acts[1].Group = %q, want Existing (should not overwrite)", acts[1].Group)
+	}
+	if obs[0].Group != "Stamped" {
+		t.Errorf("obs[0].Group = %q, want Stamped", obs[0].Group)
+	}
+	if obs[1].Group != "Existing" {
+		t.Errorf("obs[1].Group = %q, want Existing (should not overwrite)", obs[1].Group)
+	}
+}
+
 // TestPlan_ExplicitScriptFile verifies that SetScriptFile overrides discovery.
 func TestPlan_ExplicitScriptFile(t *testing.T) {
 	t.Parallel()

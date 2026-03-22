@@ -50,6 +50,7 @@ func (t Type) String() string {
 // Action is an inert description of a change to apply.
 type Action struct {
 	Type              Type
+	Group             string // resource group for display; set by engine from decl type (e.g. "File", "Package")
 	Path              string
 	Description       string
 	Recursive         bool         // DeletePath: use os.RemoveAll instead of os.Remove

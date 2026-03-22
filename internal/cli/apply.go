@@ -71,13 +71,7 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 			if !yes {
 				errw := cmd.ErrOrStderr()
 				_, _ = fmt.Fprintf(errw, "%d action(s) will be taken:\n", len(result.Actions))
-				for _, a := range result.Actions {
-					if a.NeedsSudo {
-						_, _ = fmt.Fprintf(errw, "  → [sudo] %s\n", a.Description)
-					} else {
-						_, _ = fmt.Fprintf(errw, "  → %s\n", a.Description)
-					}
-				}
+				printActions(errw, result.Actions)
 				_, _ = fmt.Fprintf(errw, "Proceed? [y/N] ")
 
 				type readResult struct {
@@ -148,16 +142,62 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 	return cmd
 }
 
-// printResult writes observations and actions to w using ✓/→ symbols.
+// printResult writes observations and actions to w as a grouped tree.
+// Items are grouped by their resource type (e.g. "brew", "file", "display").
 func printResult(w io.Writer, result action.PlanResult) {
-	for _, o := range result.Observations {
-		_, _ = fmt.Fprintf(w, "  ✓ %s\n", o.Description)
-	}
-	for _, a := range result.Actions {
-		if a.NeedsSudo {
-			_, _ = fmt.Fprintf(w, "  → [sudo] %s\n", a.Description)
-		} else {
-			_, _ = fmt.Fprintf(w, "  → %s\n", a.Description)
+	writeGroupedTree(w, result.Observations, result.Actions)
+}
+
+// printActions writes only the actions portion as a grouped tree.
+func printActions(w io.Writer, actions []action.Action) {
+	writeGroupedTree(w, nil, actions)
+}
+
+type treeEntry struct {
+	symbol string // "✓" or "→"
+	desc   string
+}
+
+// writeGroupedTree renders observations and actions as a tree grouped by resource type.
+func writeGroupedTree(w io.Writer, observations []action.Observation, actions []action.Action) {
+	// Collect entries per group, preserving declaration order.
+	groups := make(map[string][]treeEntry)
+	var groupOrder []string
+	addGroup := func(g string) {
+		if _, ok := groups[g]; !ok {
+			groupOrder = append(groupOrder, g)
+			groups[g] = nil
 		}
 	}
+
+	for _, o := range observations {
+		g := groupName(o.Group)
+		addGroup(g)
+		groups[g] = append(groups[g], treeEntry{symbol: "✓", desc: o.Description})
+	}
+	for _, a := range actions {
+		g := groupName(a.Group)
+		addGroup(g)
+		desc := a.Description
+		if a.NeedsSudo {
+			desc = "[sudo] " + desc
+		}
+		groups[g] = append(groups[g], treeEntry{symbol: "→", desc: desc})
+	}
+
+	for _, g := range groupOrder {
+		_, _ = fmt.Fprintf(w, "  %s\n", g)
+		for _, e := range groups[g] {
+			_, _ = fmt.Fprintf(w, "    %s %s\n", e.symbol, e.desc)
+		}
+	}
+}
+
+// groupName normalises a group label for display.
+func groupName(g string) string {
+	g = strings.ToLower(g)
+	if g == "" {
+		return "other"
+	}
+	return g
 }

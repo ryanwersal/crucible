@@ -3,6 +3,7 @@ package action
 // Observation records an item that was checked and found to already be
 // in the desired state — no action needed.
 type Observation struct {
+	Group       string // resource group for display; set by engine from decl type (e.g. "File", "Package")
 	Description string
 }
 

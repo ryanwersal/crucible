@@ -140,6 +140,8 @@ func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, de
 		if err != nil {
 			return action.PlanResult{}, err
 		}
+		group := d.Type.String()
+		stampGroup(out.Actions, out.Observations, group)
 		result.Actions = append(result.Actions, out.Actions...)
 		result.Observations = append(result.Observations, out.Observations...)
 	}
@@ -148,6 +150,8 @@ func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, de
 		if err != nil {
 			return action.PlanResult{}, err
 		}
+		group := t.String()
+		stampGroup(out.Actions, out.Observations, group)
 		result.Actions = append(result.Actions, out.Actions...)
 		result.Observations = append(result.Observations, out.Observations...)
 	}
@@ -327,6 +331,20 @@ func (w *observerWriter) Write(p []byte) (int, error) {
 		w.partial = w.partial[len(w.partial)-maxPartialLen:]
 	}
 	return len(p), nil
+}
+
+// stampGroup sets the Group field on actions and observations that lack one.
+func stampGroup(acts []action.Action, obs []action.Observation, group string) {
+	for i := range acts {
+		if acts[i].Group == "" {
+			acts[i].Group = group
+		}
+	}
+	for i := range obs {
+		if obs[i].Group == "" {
+			obs[i].Group = group
+		}
+	}
 }
 
 // needsSudo reports whether any action requires privilege escalation.
