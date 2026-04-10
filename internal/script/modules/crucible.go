@@ -49,6 +49,7 @@ func (m *CrucibleModule) Export(facts *FactsModule) *goja.Object {
 	_ = obj.Set("shell", m.shell)
 	_ = obj.Set("keyRemap", m.keyRemap)
 	_ = obj.Set("display", m.display)
+	_ = obj.Set("script", m.script)
 	_ = obj.Set("log", m.log)
 	if facts != nil {
 		_ = obj.Set("facts", facts.Export())
@@ -665,6 +666,36 @@ func (m *CrucibleModule) display(call goja.FunctionCall) goja.Value {
 	}
 
 	*m.declarations = append(*m.declarations, d)
+	return goja.Undefined()
+}
+
+// script declares a tool installed via a shell command.
+// Usage: c.script("claude-code", { install: "npm install -g @anthropic-ai/claude-code", check: "claude --version" })
+func (m *CrucibleModule) script(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 2 {
+		panic(m.vm.NewGoError(fmt.Errorf("script() requires a name and options argument")))
+	}
+
+	name := call.Arguments[0].String()
+	opts := call.Arguments[1].ToObject(m.vm)
+
+	installVal := opts.Get("install")
+	if installVal == nil || goja.IsUndefined(installVal) {
+		panic(m.vm.NewGoError(fmt.Errorf("script() requires an install option")))
+	}
+
+	checkVal := opts.Get("check")
+	if checkVal == nil || goja.IsUndefined(checkVal) {
+		panic(m.vm.NewGoError(fmt.Errorf("script() requires a check option")))
+	}
+
+	*m.declarations = append(*m.declarations, decl.Declaration{
+		Type:          decl.Script,
+		ScriptName:    name,
+		ScriptInstall: installVal.String(),
+		ScriptCheck:   checkVal.String(),
+	})
+
 	return goja.Undefined()
 }
 

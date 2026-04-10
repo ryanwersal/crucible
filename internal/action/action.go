@@ -32,6 +32,7 @@ const (
 	SetKeyRemap
 	RemoveKeyRemap
 	SetDisplay
+	RunScript
 )
 
 var typeNames sync.Map
@@ -79,6 +80,8 @@ type Action struct {
 	DisplayMenuBarSpacing  string          // SetDisplay: "compact", "default"
 	DisplayResolution      string          // SetDisplay: "WxH"
 	DisplayHZ              int             // SetDisplay: refresh rate
+	ScriptName             string          // RunScript: tool name
+	ScriptInstall          string          // RunScript: shell command to run
 	NeedsSudo              bool            // action requires privilege escalation
 }
 

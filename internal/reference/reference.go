@@ -242,6 +242,19 @@ Examples:
   c.display({ resolution: "1800x1169", hz: 120 })
   c.display({ sidebarIconSize: "small", menuBarSpacing: "compact", resolution: "1800x1169", hz: 120 })
 
+## c.script(name, options)
+
+Declare a tool installed via a shell command. The check command determines
+whether the tool is already installed (exit code 0 = installed).
+
+Options:
+- install: string — shell command to install the tool (required)
+- check: string — shell command to check if installed (required, exit 0 = installed)
+
+Examples:
+  c.script("claude-code", { install: "curl -fsSL https://cli.claude.ai/install.sh | sh", check: "claude --version" })
+  c.script("rustup", { install: "curl -fsSL https://sh.rustup.rs | sh -s -- -y", check: "rustup --version" })
+
 ## c.log(message)
 
 Log a message during script evaluation. Does not create a declaration.
@@ -364,6 +377,7 @@ var declTypeDescriptions = map[decl.Type]string{
 	decl.MasApp:   "Mac App Store app — installed via mas",
 	decl.KeyRemap: "Keyboard modifier remap — applied globally via hidutil with LaunchAgent persistence",
 	decl.Display:  "Display density — sidebar icon size, menu bar spacing, and resolution scaling",
+	decl.Script:   "Script-installed tool — installed via a shell command, checked by a command's exit code",
 }
 
 func writeDeclTypes(b *strings.Builder, reg *resource.Registry) {
@@ -401,6 +415,7 @@ var actionTypeDescriptions = map[action.Type]string{
 	action.SetKeyRemap:       "Apply keyboard modifier remappings via hidutil and write LaunchAgent",
 	action.RemoveKeyRemap:    "Clear keyboard modifier remappings and remove LaunchAgent",
 	action.SetDisplay:        "Apply display density settings via defaults and CoreGraphics",
+	action.RunScript:         "Run a shell command to install a tool",
 }
 
 func writeActionTypes(b *strings.Builder, reg *resource.Registry) {

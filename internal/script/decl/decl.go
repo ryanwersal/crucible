@@ -33,6 +33,7 @@ const (
 	MasApp
 	KeyRemap
 	Display
+	Script
 )
 
 var typeNames sync.Map
@@ -81,6 +82,9 @@ type Declaration struct {
 	DisplayMenuBarSpacing  string          // Display: "compact", "default"
 	DisplayResolution      string          // Display: "WxH" for built-in display
 	DisplayHZ              int             // Display: refresh rate (optional)
+	ScriptName             string          // Script: human-readable tool name
+	ScriptInstall          string          // Script: shell command to install
+	ScriptCheck            string          // Script: shell command to check if installed (exit 0 = installed)
 }
 
 // AllTypes returns every registered declaration Type, sorted by ordinal.

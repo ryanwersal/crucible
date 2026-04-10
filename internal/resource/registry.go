@@ -155,6 +155,7 @@ func newDefaultRegistry() *Registry {
 	r.RegisterHandler(ShellHandler{})
 	r.RegisterHandler(KeyRemapHandler{})
 	r.RegisterHandler(DisplayHandler{})
+	r.RegisterHandler(ScriptHandler{})
 
 	// Batch handlers
 	r.RegisterBatchHandler(PackageHandler{})
@@ -183,6 +184,7 @@ func newDefaultRegistry() *Registry {
 	r.RegisterExecutor(SetKeyRemapExecutor{})
 	r.RegisterExecutor(RemoveKeyRemapExecutor{})
 	r.RegisterExecutor(SetDisplayExecutor{})
+	r.RegisterExecutor(RunScriptExecutor{})
 
 	return r
 }

@@ -431,6 +431,20 @@ func (SetDisplayExecutor) Execute(ctx context.Context, a action.Action, _ io.Rea
 	return nil
 }
 
+// RunScriptExecutor runs a shell command to install a tool.
+type RunScriptExecutor struct{}
+
+func (RunScriptExecutor) ActionType() action.Type { return action.RunScript }
+func (RunScriptExecutor) ActionName() string      { return "RunScript" }
+
+func (RunScriptExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
+	cmd := exec.CommandContext(ctx, "sh", "-c", a.ScriptInstall)
+	cmd.Stdin = stdin
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	return cmd.Run()
+}
+
 // xmlEscape escapes special XML characters in a string.
 func xmlEscape(s string) string {
 	r := strings.NewReplacer(
