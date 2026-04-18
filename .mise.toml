@@ -1,6 +1,8 @@
 [tools]
 go = "1.26.1"
 golangci-lint = "2.11.3"
+goreleaser = "2.15.3"
+svu = "3.4.0"
 
 [tasks.build]
 description = "Build crucible binary to bin/crucible"
@@ -69,19 +71,8 @@ if [ "$behind" -gt 0 ]; then
     exit 1
 fi
 
-latest=$(git tag --list 'v*' --sort=-v:refname | head -n1)
-: "${latest:=v0.0.0}"
-stripped=${latest#v}
-major=$(echo "$stripped" | cut -d. -f1)
-minor=$(echo "$stripped" | cut -d. -f2)
-patch=$(echo "$stripped" | cut -d. -f3)
-
-case "$bump" in
-    major) major=$((major+1)); minor=0; patch=0 ;;
-    minor) minor=$((minor+1)); patch=0 ;;
-    patch) patch=$((patch+1)) ;;
-esac
-new="v${major}.${minor}.${patch}"
+latest=$(svu current 2>/dev/null || echo "v0.0.0")
+new=$(svu "$bump")
 
 printf '\nCurrent: %s\nNew:     %s\n\n' "$latest" "$new"
 printf 'Tag %s and push to origin? [y/N] ' "$new"
