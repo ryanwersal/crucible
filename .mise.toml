@@ -34,3 +34,66 @@ run = "golangci-lint run ./..."
 [tasks.check]
 description = "Run all checks (lint + test)"
 depends = ["lint", "test"]
+
+[tasks.release]
+description = "Bump version (major|minor|patch), tag, and push — triggers GH release + Homebrew tap update"
+usage = 'arg "<bump>" help="major, minor, or patch"'
+run = '''
+set -eu
+
+bump="$usage_bump"
+case "$bump" in
+    major|minor|patch) ;;
+    *)
+        echo "bump must be one of: major, minor, patch (got: $bump)" >&2
+        exit 1
+        ;;
+esac
+
+if [ -n "$(git status --porcelain)" ]; then
+    echo "Working tree is dirty. Commit or stash before releasing." >&2
+    exit 1
+fi
+
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [ "$branch" != "main" ]; then
+    echo "Not on main (on $branch). Release from main." >&2
+    exit 1
+fi
+
+git fetch --tags origin main
+
+behind=$(git rev-list --count HEAD..origin/main)
+if [ "$behind" -gt 0 ]; then
+    echo "Local main is $behind commits behind origin/main. Pull first." >&2
+    exit 1
+fi
+
+latest=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+: "${latest:=v0.0.0}"
+stripped=${latest#v}
+major=$(echo "$stripped" | cut -d. -f1)
+minor=$(echo "$stripped" | cut -d. -f2)
+patch=$(echo "$stripped" | cut -d. -f3)
+
+case "$bump" in
+    major) major=$((major+1)); minor=0; patch=0 ;;
+    minor) minor=$((minor+1)); patch=0 ;;
+    patch) patch=$((patch+1)) ;;
+esac
+new="v${major}.${minor}.${patch}"
+
+printf '\nCurrent: %s\nNew:     %s\n\n' "$latest" "$new"
+printf 'Tag %s and push to origin? [y/N] ' "$new"
+read -r ans
+case "$ans" in
+    y|Y) ;;
+    *) echo "Aborted." >&2; exit 1 ;;
+esac
+
+git tag -a "$new" -m "Release $new"
+git push origin main "$new"
+
+printf '\nTag pushed. Release workflow running at:\n'
+printf '  https://github.com/ryanwersal/crucible/actions\n'
+'''
