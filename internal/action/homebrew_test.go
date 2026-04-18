@@ -95,6 +95,26 @@ func TestDiffHomebrew(t *testing.T) {
 			},
 			wantActions: 0,
 		},
+		{
+			name:    "alias matches canonical formula",
+			desired: []DesiredPackage{{Name: "kubectl"}},
+			actual: &fact.HomebrewInfo{
+				Available: true,
+				Formulae:  map[string]bool{"kubernetes-cli": true, "kubectl": true},
+				Casks:     map[string]bool{},
+			},
+			wantActions: 0,
+		},
+		{
+			name:    "absent alias uninstalls when alias is in set",
+			desired: []DesiredPackage{{Name: "kubectl", Absent: true}},
+			actual: &fact.HomebrewInfo{
+				Available: true,
+				Formulae:  map[string]bool{"kubernetes-cli": true, "kubectl": true},
+				Casks:     map[string]bool{},
+			},
+			wantActions: 1,
+		},
 	}
 
 	for _, tt := range tests {

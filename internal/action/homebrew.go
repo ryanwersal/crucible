@@ -44,8 +44,14 @@ func DiffHomebrew(desired []DesiredPackage, actual *fact.HomebrewInfo) ([]Action
 }
 
 // isInstalled checks whether a package is present in either formulae or casks.
-// Tap-qualified names like "owner/tap/formula" are matched by their short name.
+// The fact's Formulae/Casks sets include canonical names, full_names/tokens,
+// aliases, and oldnames — so aliased formulas like "kubectl" (→ kubernetes-cli)
+// and tap-qualified names both match directly. shortName() is the fallback for
+// the legacy case where a tap-qualified desired name predates alias-aware facts.
 func isInstalled(name string, actual *fact.HomebrewInfo) bool {
+	if actual.Formulae[name] || actual.Casks[name] {
+		return true
+	}
 	short := shortName(name)
 	return actual.Formulae[short] || actual.Casks[short]
 }
