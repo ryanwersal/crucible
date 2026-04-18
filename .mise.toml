@@ -75,12 +75,6 @@ latest=$(svu current 2>/dev/null || echo "v0.0.0")
 new=$(svu "$bump")
 
 printf '\nCurrent: %s\nNew:     %s\n\n' "$latest" "$new"
-printf 'Tag %s and push to origin? [y/N] ' "$new"
-read -r ans
-case "$ans" in
-    y|Y) ;;
-    *) echo "Aborted." >&2; exit 1 ;;
-esac
 
 git tag -a "$new" -m "Release $new"
 git push origin main "$new"
