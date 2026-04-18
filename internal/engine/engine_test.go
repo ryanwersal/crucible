@@ -300,6 +300,120 @@ func TestApplyResultWithOptions_Concurrent(t *testing.T) {
 	}
 }
 
+func TestApplyResultWithOptions_SamePathSerializes(t *testing.T) {
+	t.Parallel()
+
+	// Simulates the (DeletePath, CreateSymlink) pair for a "target changed"
+	// symlink: both touch the same Path and must run in order, even when the
+	// concurrency limit would otherwise allow them to race.
+	var mu sync.Mutex
+	var order []string
+	inFlight := 0
+	maxPerPath := 0
+	exec := &testExecutor{
+		execFn: func(_ context.Context, a action.Action, _, _ io.Writer) error {
+			mu.Lock()
+			// Count peers currently running against the same path.
+			if a.Path == "/same/path" {
+				inFlight++
+				if inFlight > maxPerPath {
+					maxPerPath = inFlight
+				}
+			}
+			mu.Unlock()
+			time.Sleep(10 * time.Millisecond)
+			mu.Lock()
+			if a.Path == "/same/path" {
+				inFlight--
+			}
+			order = append(order, a.Description)
+			mu.Unlock()
+			return nil
+		},
+	}
+	eng := newTestEngine(t, exec)
+
+	plan := action.PlanResult{
+		Actions: []action.Action{
+			{Type: action.WriteFile, Path: "/same/path", Description: "delete-first"},
+			{Type: action.WriteFile, Path: "/same/path", Description: "create-second"},
+			{Type: action.WriteFile, Path: "/other/path", Description: "other"},
+		},
+	}
+
+	result, err := eng.ApplyResultWithOptions(context.Background(), plan, ApplyOptions{Concurrency: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Errors()) != 0 {
+		t.Fatalf("unexpected errors: %v", result.Errors())
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if maxPerPath > 1 {
+		t.Errorf("actions on /same/path ran concurrently (peak=%d, want 1)", maxPerPath)
+	}
+	deleteIdx, createIdx := -1, -1
+	for i, d := range order {
+		switch d {
+		case "delete-first":
+			deleteIdx = i
+		case "create-second":
+			createIdx = i
+		}
+	}
+	if deleteIdx == -1 || createIdx == -1 {
+		t.Fatalf("missing completions in %v", order)
+	}
+	if deleteIdx > createIdx {
+		t.Errorf("plan order not preserved within path chain: delete=%d, create=%d", deleteIdx, createIdx)
+	}
+}
+
+func TestGroupByPath(t *testing.T) {
+	t.Parallel()
+
+	mk := func(idx int, path, desc string) indexedAction {
+		return indexedAction{index: idx, action: action.Action{Path: path, Description: desc}}
+	}
+
+	in := []indexedAction{
+		mk(0, "/a", "a1"),
+		mk(1, "", "noPath-1"),
+		mk(2, "/a", "a2"),
+		mk(3, "/b", "b1"),
+		mk(4, "", "noPath-2"),
+		mk(5, "/a", "a3"),
+	}
+
+	got := groupByPath(in)
+
+	if len(got) != 4 {
+		t.Fatalf("expected 4 chains, got %d: %+v", len(got), got)
+	}
+	// Chain 0: all /a actions, in plan order.
+	if len(got[0]) != 3 || got[0][0].action.Description != "a1" ||
+		got[0][1].action.Description != "a2" || got[0][2].action.Description != "a3" {
+		t.Errorf("chain[0] = %+v, want [a1 a2 a3] in order", descs(got[0]))
+	}
+	// Singleton chains for empty-path and unique-path actions.
+	for i, want := range []string{"noPath-1", "b1", "noPath-2"} {
+		chain := got[i+1]
+		if len(chain) != 1 || chain[0].action.Description != want {
+			t.Errorf("chain[%d] = %v, want singleton %q", i+1, descs(chain), want)
+		}
+	}
+}
+
+func descs(chain []indexedAction) []string {
+	out := make([]string, len(chain))
+	for i, ia := range chain {
+		out[i] = ia.action.Description
+	}
+	return out
+}
+
 func TestApplyResultWithOptions_CollectsErrors(t *testing.T) {
 	t.Parallel()
 

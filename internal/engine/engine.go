@@ -253,37 +253,68 @@ type indexedAction struct {
 }
 
 func (e *Engine) runConcurrent(ctx context.Context, actions []indexedAction, results []ActionResult, opts ApplyOptions) {
+	// Group actions that touch the same Path into ordered chains so that pairs
+	// like (DeletePath, CreateSymlink) for one path don't race. Chains are
+	// executed concurrently with respect to each other; actions within a chain
+	// run sequentially in plan order.
+	chains := groupByPath(actions)
+
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(opts.Concurrency)
 
-	for _, ia := range actions {
+	for _, chain := range chains {
 		g.Go(func() error {
-			// Short-circuit if context was cancelled while waiting for a slot.
-			if gctx.Err() != nil {
-				return nil
-			}
+			for _, ia := range chain {
+				// Short-circuit if context was cancelled while waiting for a slot
+				// or between actions in the chain.
+				if gctx.Err() != nil {
+					return nil
+				}
 
-			if opts.Observer != nil {
-				opts.Observer.ActionStarted(ia.index, ia.action)
-			}
+				if opts.Observer != nil {
+					opts.Observer.ActionStarted(ia.index, ia.action)
+				}
 
-			// Always use per-action writers for concurrent execution to avoid
-			// interleaved output from multiple goroutines sharing a writer.
-			buf := newObserverWriter(ia.index, opts.Observer)
+				// Always use per-action writers for concurrent execution to avoid
+				// interleaved output from multiple goroutines sharing a writer.
+				buf := newObserverWriter(ia.index, opts.Observer)
 
-			err := e.registry.Execute(gctx, ia.action, nil, buf, buf)
-			// Safe: each goroutine writes to a distinct index; results is only
-			// read after g.Wait() returns.
-			results[ia.index] = ActionResult{Action: ia.action, Err: err}
+				err := e.registry.Execute(gctx, ia.action, nil, buf, buf)
+				// Safe: each goroutine writes to a distinct index; results is only
+				// read after g.Wait() returns.
+				results[ia.index] = ActionResult{Action: ia.action, Err: err}
 
-			if opts.Observer != nil {
-				opts.Observer.ActionCompleted(ia.index, ia.action, err)
+				if opts.Observer != nil {
+					opts.Observer.ActionCompleted(ia.index, ia.action, err)
+				}
 			}
 			return nil // never return error — we collect them in results
 		})
 	}
 
 	_ = g.Wait()
+}
+
+// groupByPath partitions actions into chains that must execute sequentially.
+// Actions sharing a non-empty Path go into the same chain in plan order;
+// actions with an empty Path (or a unique Path) each form a singleton chain.
+func groupByPath(actions []indexedAction) [][]indexedAction {
+	var chains [][]indexedAction
+	chainByPath := make(map[string]int, len(actions))
+	for _, ia := range actions {
+		path := ia.action.Path
+		if path == "" {
+			chains = append(chains, []indexedAction{ia})
+			continue
+		}
+		if idx, ok := chainByPath[path]; ok {
+			chains[idx] = append(chains[idx], ia)
+		} else {
+			chainByPath[path] = len(chains)
+			chains = append(chains, []indexedAction{ia})
+		}
+	}
+	return chains
 }
 
 // observerWriter is an io.Writer that splits output into lines and feeds
