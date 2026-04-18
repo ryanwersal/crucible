@@ -17,25 +17,31 @@ builds:
       - -X github.com/ryanwersal/crucible/internal/cli.date={{.Date}}
 
 archives:
-  - format: tar.gz
+  - formats: [tar.gz]
     files:
       - LICENSE
 
-brews:
-  - repository:
-      owner: ryanwersal
-      name: homebrew-tools
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    name: crucible
+homebrew_casks:
+  - name: crucible
+    binaries:
+      - crucible
     homepage: https://github.com/ryanwersal/crucible
     description: A declarative dotfile and system configuration manager
     license: GPL-3.0
-    custom_block: |
-      depends_on :macos
-    install: |
-      bin.install "crucible"
-    test: |
-      system bin/"crucible", "version"
+    # Strip Gatekeeper quarantine from the unsigned binary so it runs on
+    # first launch without "cannot be opened because the developer cannot
+    # be verified".
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/crucible"]
+          end
+    repository:
+      owner: ryanwersal
+      name: homebrew-tools
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
 
 changelog:
   sort: asc

@@ -32,3 +32,6 @@ Thumbs.db
 # Claude Code
 .claude/settings.local.json
 bin/
+
+# goreleaser snapshot output
+dist/
