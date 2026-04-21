@@ -33,7 +33,13 @@ func DiffGitRepo(desired DesiredGitRepo, actual *fact.GitRepoInfo) ([]Action, []
 		}}
 	}
 
-	// Correct remote — pull to ensure up-to-date
+	// If we were able to read both local and remote HEAD SHAs and they
+	// match, there's nothing to pull. Otherwise (drift, or remote SHA
+	// unavailable) emit a pull so we stay in sync.
+	if actual.LocalSHA != "" && actual.RemoteSHA != "" && actual.LocalSHA == actual.RemoteSHA {
+		return nil, nil
+	}
+
 	return []Action{{
 		Type:        PullRepo,
 		Path:        desired.Path,

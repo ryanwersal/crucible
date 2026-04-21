@@ -32,15 +32,42 @@ func TestDiffGitRepo(t *testing.T) {
 			wantType:    CloneRepo,
 		},
 		{
-			name:    "correct remote pulls",
+			name:    "correct remote pulls when remote SHA unknown",
 			desired: DesiredGitRepo{Path: "/home/user/.oh-my-zsh", URL: "https://github.com/ohmyzsh/ohmyzsh.git", Branch: "master"},
 			actual: &fact.GitRepoInfo{
 				Exists:        true,
 				RemoteURL:     "https://github.com/ohmyzsh/ohmyzsh.git",
 				CurrentBranch: "master",
+				LocalSHA:      "abc123",
 			},
 			wantActions: 1,
 			wantType:    PullRepo,
+		},
+		{
+			name:    "local drift pulls",
+			desired: DesiredGitRepo{Path: "/home/user/.oh-my-zsh", URL: "https://github.com/ohmyzsh/ohmyzsh.git", Branch: "master"},
+			actual: &fact.GitRepoInfo{
+				Exists:        true,
+				RemoteURL:     "https://github.com/ohmyzsh/ohmyzsh.git",
+				CurrentBranch: "master",
+				LocalSHA:      "abc123",
+				RemoteSHA:     "def456",
+			},
+			wantActions: 1,
+			wantType:    PullRepo,
+		},
+		{
+			name:    "in sync skips pull",
+			desired: DesiredGitRepo{Path: "/home/user/.oh-my-zsh", URL: "https://github.com/ohmyzsh/ohmyzsh.git", Branch: "master"},
+			actual: &fact.GitRepoInfo{
+				Exists:        true,
+				RemoteURL:     "https://github.com/ohmyzsh/ohmyzsh.git",
+				CurrentBranch: "master",
+				LocalSHA:      "abc123",
+				RemoteSHA:     "abc123",
+			},
+			wantActions:      0,
+			wantObservations: 0,
 		},
 		{
 			name:    "wrong remote warns",
