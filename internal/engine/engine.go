@@ -33,7 +33,16 @@ type Engine struct {
 }
 
 // New creates an Engine that maps sourceDir files onto targetDir.
+// Both directories are resolved to absolute paths so that downstream handlers
+// can rely on env.SourceDir / env.TargetDir being absolute — important for
+// symlink targets, which are stored on disk verbatim and must not be relative.
 func New(sourceDir, targetDir string, logger *slog.Logger) *Engine {
+	if abs, err := filepath.Abs(sourceDir); err == nil {
+		sourceDir = abs
+	}
+	if abs, err := filepath.Abs(targetDir); err == nil {
+		targetDir = abs
+	}
 	return &Engine{
 		sourceDir: sourceDir,
 		targetDir: targetDir,

@@ -655,6 +655,25 @@ func TestStampGroup(t *testing.T) {
 	}
 }
 
+// TestNew_ResolvesRelativeDirsToAbsolute verifies that engine.New normalizes
+// sourceDir and targetDir so handlers (notably symlink) can rely on SourceDir
+// being absolute. Passing "." previously left env.SourceDir relative, and
+// filepath.Join(".", "target") kept the symlink target relative — resulting
+// in dangling links on disk.
+func TestNew_ResolvesRelativeDirsToAbsolute(t *testing.T) {
+	// t.Chdir is incompatible with t.Parallel, so this test is serial.
+	src := t.TempDir()
+	t.Chdir(src)
+
+	eng := New(".", ".", slog.New(slog.DiscardHandler))
+	if !filepath.IsAbs(eng.sourceDir) {
+		t.Errorf("sourceDir = %q, want absolute", eng.sourceDir)
+	}
+	if !filepath.IsAbs(eng.targetDir) {
+		t.Errorf("targetDir = %q, want absolute", eng.targetDir)
+	}
+}
+
 // TestPlan_ExplicitScriptFile verifies that SetScriptFile overrides discovery.
 func TestPlan_ExplicitScriptFile(t *testing.T) {
 	t.Parallel()
