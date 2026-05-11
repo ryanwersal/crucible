@@ -172,7 +172,7 @@ func indentLines(s, prefix string) string {
 	var out bytes.Buffer
 	out.Grow(len(s) + len(prefix)*8)
 	out.WriteString(prefix)
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		out.WriteByte(s[i])
 		if s[i] == '\n' && i != len(s)-1 {
 			out.WriteString(prefix)

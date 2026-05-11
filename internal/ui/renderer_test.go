@@ -71,7 +71,7 @@ func TestActionOutput_Overflow(t *testing.T) {
 	a := action.Action{Description: "test"}
 	r.ActionStarted(0, a)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		r.ActionOutput(0, fmt.Sprintf("line %d", i))
 	}
 
@@ -158,7 +158,7 @@ func TestTruncate(t *testing.T) {
 			// Count visible chars.
 			visible := 0
 			inEsc := false
-			for i := 0; i < len(got); i++ {
+			for i := range len(got) {
 				if got[i] == '\033' {
 					inEsc = true
 					continue

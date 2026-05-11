@@ -36,8 +36,8 @@ func TestRunCmd_FailureCapturesOutput(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
-	var cmdErr *CommandError
-	if !errors.As(err, &cmdErr) {
+	cmdErr, ok := errors.AsType[*CommandError](err)
+	if !ok {
 		t.Fatalf("expected *CommandError, got %T: %v", err, err)
 	}
 	if cmdErr.Command != "sh" {
@@ -53,8 +53,7 @@ func TestRunCmd_FailureCapturesOutput(t *testing.T) {
 	}
 
 	// The wrapped exec error must remain reachable so callers can detect it.
-	var exitErr *exec.ExitError
-	if !errors.As(err, &exitErr) {
+	if _, ok := errors.AsType[*exec.ExitError](err); !ok {
 		t.Errorf("expected wrapped *exec.ExitError; got %v", err)
 	}
 }
@@ -86,8 +85,8 @@ func TestRunCmd_NilWriters(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	var cmdErr *CommandError
-	if !errors.As(err, &cmdErr) {
+	cmdErr, ok := errors.AsType[*CommandError](err)
+	if !ok {
 		t.Fatalf("expected *CommandError, got %T", err)
 	}
 	if !strings.Contains(cmdErr.Output, "silent") {
@@ -103,8 +102,7 @@ func TestRunCmd_ContextCancelledNotWrapped(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from cancelled context")
 	}
-	var cmdErr *CommandError
-	if errors.As(err, &cmdErr) {
+	if _, ok := errors.AsType[*CommandError](err); ok {
 		t.Fatalf("context cancellation should not produce a *CommandError; got %v", err)
 	}
 }
