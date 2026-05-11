@@ -13,11 +13,11 @@ func TestDiffKeyRemap(t *testing.T) {
 	controlCode := uint64(0x7000000E0)
 
 	tests := []struct {
-		name       string
-		desired    DesiredKeyRemap
-		actual     *fact.KeyRemapInfo
-		wantCount  int
-		wantType   Type
+		name      string
+		desired   DesiredKeyRemap
+		actual    *fact.KeyRemapInfo
+		wantCount int
+		wantType  Type
 	}{
 		{
 			name: "no remaps needed, nil actual",
@@ -54,7 +54,7 @@ func TestDiffKeyRemap(t *testing.T) {
 			wantType:  SetKeyRemap,
 		},
 		{
-			name: "absent with existing mappings",
+			name:    "absent with existing mappings",
 			desired: DesiredKeyRemap{Absent: true},
 			actual: &fact.KeyRemapInfo{
 				Mappings: []fact.KeyRemapMapping{
