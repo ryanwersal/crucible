@@ -84,6 +84,18 @@ Each function on ` + "`c`" + ` declares desired state. System facts are availabl
 All path arguments accept ` + "`~`" + ` as a prefix for the target (home) directory.
 Any resource function accepts ` + "`{ state: \"absent\" }`" + ` as its options to remove the resource.
 
+## Built-in modules
+
+In addition to the ` + "`crucible`" + ` module, scripts can require a Node-compatible ` + "`path`" + ` module:
+
+  var path = require("node:path");   // or require("path")
+  path.join("a", "b", "c");          // "a/b/c"
+
+Currently exposes:
+- path.join(...segments) — joins segments with the platform separator and normalizes
+  the result (resolves ` + "`.`" + ` and ` + "`..`" + `, collapses duplicate separators). Returns ` + "`\".\"`" + `
+  when called with no arguments. Throws TypeError if any argument is not a string.
+
 ## c.file(path, options?)
 
 Declare a managed file.

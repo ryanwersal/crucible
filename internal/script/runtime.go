@@ -49,6 +49,9 @@ func NewRuntime(ctx context.Context, logger *slog.Logger, sourceDir, targetDir s
 	// Enable console (wired to stdout via goja_nodejs)
 	console.Enable(vm)
 
+	// Register the Node-compatible path module (require("node:path") or require("path")).
+	modules.RegisterPath(r.registry)
+
 	// Register the crucible native module with facts attached as c.facts.
 	r.registry.RegisterNativeModule("crucible", func(runtime *goja.Runtime, module *goja.Object) {
 		factsMod := modules.NewFactsModule(runtime, ctx, store)
