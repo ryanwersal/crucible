@@ -116,10 +116,10 @@ Examples:
 Declare a managed directory.
 
 Options:
-- mode: number — directory permissions (default: 0o755)
+- mode: number — directory permissions (default: 0o700)
 
 Example:
-  c.dir("~/.config/fish", { mode: 0o755 })
+  c.dir("~/.config/fish", { mode: 0o700 })
 
 ## c.symlink(path, options)
 

@@ -128,7 +128,7 @@ func (m *CrucibleModule) applyFileOpts(decl *decl.Declaration, opts *goja.Object
 }
 
 // dir declares a managed directory.
-// Usage: c.dir("~/.config/fish", { mode: 0o755 })
+// Usage: c.dir("~/.config/fish", { mode: 0o700 })
 func (m *CrucibleModule) dir(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		panic(m.vm.NewGoError(fmt.Errorf("dir() requires a path argument")))
@@ -138,7 +138,7 @@ func (m *CrucibleModule) dir(call goja.FunctionCall) goja.Value {
 	d := decl.Declaration{
 		Type: decl.Dir,
 		Path: path,
-		Mode: 0o755, // default
+		Mode: 0o700, // default — crucible manages single-user $HOME content
 	}
 
 	if len(call.Arguments) >= 2 {

@@ -133,8 +133,8 @@ func TestDir_DefaultMode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if (*decls)[0].Mode != 0o755 {
-		t.Errorf("default mode = %o, want 755", (*decls)[0].Mode)
+	if (*decls)[0].Mode != 0o700 {
+		t.Errorf("default mode = %o, want 700", (*decls)[0].Mode)
 	}
 }
 
