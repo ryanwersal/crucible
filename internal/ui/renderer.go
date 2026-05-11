@@ -197,9 +197,20 @@ func (r *Renderer) render() {
 			if s.action.NeedsSudo {
 				desc = "[sudo] " + desc
 			}
-			buf.WriteString(r.truncate(fmt.Sprintf("  \033[31m✗ %s: %v\033[0m", desc, s.err)))
+			// Use the first line of the error so multi-line CommandError
+			// messages don't blow up the headline; the captured tail is
+			// shown via the trailing output lines below.
+			headline := firstLine(s.err.Error())
+			buf.WriteString(r.truncate(fmt.Sprintf("  \033[31m✗ %s: %s\033[0m", desc, headline)))
 			buf.WriteString("\033[K\n")
 			lineCount++
+			// Keep the captured subprocess output visible below the failure
+			// marker so the user can diagnose without re-running.
+			for _, line := range s.lines {
+				buf.WriteString(r.truncate(fmt.Sprintf("    \033[31m│\033[0m \033[2m%s\033[0m", line)))
+				buf.WriteString("\033[K\n")
+				lineCount++
+			}
 		}
 	}
 
@@ -222,6 +233,16 @@ func (r *Renderer) render() {
 
 	r.lastLineCount = lineCount
 	_, _ = fmt.Fprint(r.w, buf.String())
+}
+
+// firstLine returns the portion of s up to the first newline (without the
+// newline itself). Multi-line error messages use the rest of the lines for
+// detail; the headline gets just the summary.
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
 
 func (r *Renderer) truncate(s string) string {

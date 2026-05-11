@@ -1,7 +1,10 @@
 package ui
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/ryanwersal/crucible/internal/action"
@@ -77,6 +80,59 @@ func TestActionOutput_Overflow(t *testing.T) {
 	}
 	if r.actions[0].lines[0] != "line 7" {
 		t.Errorf("oldest line = %q, want line 7", r.actions[0].lines[0])
+	}
+}
+
+func TestFirstLine(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		in, want string
+	}{
+		{"one line", "one line"},
+		{"first\nsecond", "first"},
+		{"\nblank-first", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		if got := firstLine(tt.in); got != tt.want {
+			t.Errorf("firstLine(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestRender_FailureKeepsOutputLines(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	r := &Renderer{
+		w:         &buf,
+		actions:   make([]actionState, 1),
+		maxLines:  5,
+		termWidth: 200,
+	}
+
+	a := action.Action{Type: action.InstallPackage, Description: "brew install foo"}
+	r.ActionStarted(0, a)
+	r.ActionOutput(0, "==> Searching")
+	r.ActionOutput(0, `Error: No available formula with the name "foo"`)
+	r.ActionCompleted(0, a, errors.New("exit status 1\n    Error: No available formula"))
+
+	r.render()
+
+	got := buf.String()
+	if !strings.Contains(got, "✗ brew install foo: exit status 1") {
+		t.Errorf("headline missing or includes second line: %q", got)
+	}
+	// The headline is built from firstLine(err) so the second line of the
+	// error body must not appear adjacent to "exit status 1" in the headline.
+	if strings.Contains(got, "exit status 1\n    Error: No available formula") {
+		t.Errorf("headline included multi-line error body: %q", got)
+	}
+	if !strings.Contains(got, "==> Searching") {
+		t.Errorf("captured output missing first line: %q", got)
+	}
+	if !strings.Contains(got, `Error: No available formula with the name "foo"`) {
+		t.Errorf("captured output missing failure line: %q", got)
 	}
 }
 

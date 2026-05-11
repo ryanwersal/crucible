@@ -107,7 +107,7 @@ func (InstallPackageExecutor) ActionType() action.Type { return action.InstallPa
 func (InstallPackageExecutor) ActionName() string      { return "InstallPackage" }
 
 func (InstallPackageExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
-	return buildCmd(ctx, a, stdin, stdout, stderr, "brew", "install", a.PackageName).Run()
+	return runCmd(ctx, a, stdin, stdout, stderr, "brew", "install", a.PackageName)
 }
 
 // UninstallPackageExecutor removes a Homebrew package.
@@ -117,7 +117,7 @@ func (UninstallPackageExecutor) ActionType() action.Type { return action.Uninsta
 func (UninstallPackageExecutor) ActionName() string      { return "UninstallPackage" }
 
 func (UninstallPackageExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
-	return buildCmd(ctx, a, stdin, stdout, stderr, "brew", "uninstall", a.PackageName).Run()
+	return runCmd(ctx, a, stdin, stdout, stderr, "brew", "uninstall", a.PackageName)
 }
 
 // SetDefaultsExecutor writes a macOS defaults value.
@@ -202,7 +202,7 @@ func (CloneRepoExecutor) Execute(ctx context.Context, a action.Action, stdin io.
 		args = append(args, "--branch", a.GitBranch)
 	}
 	args = append(args, a.GitURL, a.Path)
-	return buildCmd(ctx, a, stdin, stdout, stderr, "git", args...).Run()
+	return runCmd(ctx, a, stdin, stdout, stderr, "git", args...)
 }
 
 // PullRepoExecutor pulls updates in a git repository.
@@ -212,7 +212,7 @@ func (PullRepoExecutor) ActionType() action.Type { return action.PullRepo }
 func (PullRepoExecutor) ActionName() string      { return "PullRepo" }
 
 func (PullRepoExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
-	return buildCmd(ctx, a, stdin, stdout, stderr, "git", "-C", a.Path, "pull").Run()
+	return runCmd(ctx, a, stdin, stdout, stderr, "git", "-C", a.Path, "pull")
 }
 
 // InstallFontExecutor copies a font file to its destination.
@@ -247,7 +247,7 @@ func (InstallMiseToolExecutor) ActionName() string      { return "InstallMiseToo
 
 func (InstallMiseToolExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
 	spec := a.MiseToolName + "@" + a.MiseToolVersion
-	return buildCmd(ctx, a, stdin, stdout, stderr, "mise", "use", "--global", spec).Run()
+	return runCmd(ctx, a, stdin, stdout, stderr, "mise", "use", "--global", spec)
 }
 
 // UninstallMiseToolExecutor removes a mise tool.
@@ -257,7 +257,7 @@ func (UninstallMiseToolExecutor) ActionType() action.Type { return action.Uninst
 func (UninstallMiseToolExecutor) ActionName() string      { return "UninstallMiseTool" }
 
 func (UninstallMiseToolExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
-	return buildCmd(ctx, a, stdin, stdout, stderr, "mise", "uninstall", a.MiseToolName).Run()
+	return runCmd(ctx, a, stdin, stdout, stderr, "mise", "uninstall", a.MiseToolName)
 }
 
 // SetShellExecutor changes the user's login shell.
@@ -289,7 +289,7 @@ func (InstallMasAppExecutor) ActionName() string      { return "InstallMasApp" }
 
 func (InstallMasAppExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
 	id := fmt.Sprintf("%d", a.MasAppID)
-	return buildCmd(ctx, a, stdin, stdout, stderr, "mas", "install", id).Run()
+	return runCmd(ctx, a, stdin, stdout, stderr, "mas", "install", id)
 }
 
 // SetKeyRemapExecutor applies keyboard modifier remappings via hidutil
@@ -438,11 +438,7 @@ func (RunScriptExecutor) ActionType() action.Type { return action.RunScript }
 func (RunScriptExecutor) ActionName() string      { return "RunScript" }
 
 func (RunScriptExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
-	cmd := exec.CommandContext(ctx, "sh", "-c", a.ScriptInstall)
-	cmd.Stdin = stdin
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	return cmd.Run()
+	return runCmd(ctx, a, stdin, stdout, stderr, "sh", "-c", a.ScriptInstall)
 }
 
 // xmlEscape escapes special XML characters in a string.
