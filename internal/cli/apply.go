@@ -2,11 +2,13 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/ryanwersal/crucible/internal/action"
@@ -68,36 +70,42 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 				return nil
 			}
 
+			errw := cmd.ErrOrStderr()
+
 			if !yes {
-				errw := cmd.ErrOrStderr()
 				_, _ = fmt.Fprintf(errw, "%d action(s) will be taken:\n", len(result.Actions))
 				printActions(errw, result.Actions)
 				_, _ = fmt.Fprintf(errw, "Proceed? [y/N] ")
-
-				type readResult struct {
-					line string
-					err  error
+				ok, err := readConfirmation(cmd.Context(), cmd.InOrStdin(), errw, []string{"y", "yes"})
+				if err != nil {
+					return err
 				}
-				ch := make(chan readResult, 1) // buffered so the goroutine can exit if ctx wins the select
-				go func() {
-					reader := bufio.NewReader(cmd.InOrStdin())
-					line, err := reader.ReadString('\n')
-					ch <- readResult{line, err}
-				}()
+				if !ok {
+					_, _ = fmt.Fprintln(errw, "Aborted.")
+					return nil
+				}
+			}
 
-				select {
-				case <-cmd.Context().Done():
-					_, _ = fmt.Fprintln(errw, "\nAborted.")
-					return cmd.Context().Err()
-				case r := <-ch:
-					if r.err != nil && !errors.Is(r.err, io.EOF) {
-						return fmt.Errorf("reading confirmation: %w", r.err)
+			// Destructive operations get a dedicated confirmation regardless
+			// of --yes. The user must spell out "yes" — single "y" is not
+			// enough — and the prompt enumerates exactly what will be lost.
+			if destructive := result.Destructive(); len(destructive) > 0 {
+				_, _ = fmt.Fprintln(errw)
+				_, _ = fmt.Fprintf(errw, "⚠ %d destructive operation(s) detected — content will be permanently lost:\n", len(destructive))
+				for _, a := range destructive {
+					_, _ = fmt.Fprintf(errw, "  ⚠ %s\n", a.Description)
+					if a.DestructiveReason != "" {
+						_, _ = fmt.Fprintf(errw, "      %s\n", a.DestructiveReason)
 					}
-					answer := strings.TrimSpace(strings.ToLower(r.line))
-					if answer != "y" && answer != "yes" {
-						_, _ = fmt.Fprintln(errw, "Aborted.")
-						return nil
-					}
+				}
+				_, _ = fmt.Fprintf(errw, "Type \"yes\" to confirm destruction, anything else to abort: ")
+				ok, err := readConfirmation(cmd.Context(), cmd.InOrStdin(), errw, []string{"yes"})
+				if err != nil {
+					return err
+				}
+				if !ok {
+					_, _ = fmt.Fprintln(errw, "Aborted.")
+					return nil
 				}
 			}
 
@@ -142,6 +150,35 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 	return cmd
 }
 
+// readConfirmation reads a single line from stdin and reports whether it
+// (case-insensitively, trimmed) matches one of the accepted strings. Returns
+// (false, nil) on any other answer or on EOF; cancels cleanly if ctx fires
+// while waiting for input. Errors from stdin (other than EOF) propagate up.
+func readConfirmation(ctx context.Context, stdin io.Reader, stderr io.Writer, accept []string) (bool, error) {
+	type readResult struct {
+		line string
+		err  error
+	}
+	ch := make(chan readResult, 1) // buffered so the goroutine can exit if ctx wins the select
+	go func() {
+		reader := bufio.NewReader(stdin)
+		line, err := reader.ReadString('\n')
+		ch <- readResult{line, err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		_, _ = fmt.Fprintln(stderr, "\nAborted.")
+		return false, ctx.Err()
+	case r := <-ch:
+		if r.err != nil && !errors.Is(r.err, io.EOF) {
+			return false, fmt.Errorf("reading confirmation: %w", r.err)
+		}
+		answer := strings.TrimSpace(strings.ToLower(r.line))
+		return slices.Contains(accept, answer), nil
+	}
+}
+
 // printResult writes observations and actions to w as a grouped tree.
 // Items are grouped by their resource type (e.g. "brew", "file", "display").
 func printResult(w io.Writer, result action.PlanResult) {
@@ -154,11 +191,14 @@ func printActions(w io.Writer, actions []action.Action) {
 }
 
 type treeEntry struct {
-	symbol string // "✓" or "→"
+	symbol string // "✓", "→", or "⚠"
 	desc   string
+	reason string // populated only for destructive entries
 }
 
 // writeGroupedTree renders observations and actions as a tree grouped by resource type.
+// Destructive actions use the "⚠" symbol and a second indented line showing
+// what content would be lost.
 func writeGroupedTree(w io.Writer, observations []action.Observation, actions []action.Action) {
 	// Collect entries per group, preserving declaration order.
 	groups := make(map[string][]treeEntry)
@@ -182,13 +222,21 @@ func writeGroupedTree(w io.Writer, observations []action.Observation, actions []
 		if a.NeedsSudo {
 			desc = "[sudo] " + desc
 		}
-		groups[g] = append(groups[g], treeEntry{symbol: "→", desc: desc})
+		entry := treeEntry{symbol: "→", desc: desc}
+		if a.Destructive {
+			entry.symbol = "⚠"
+			entry.reason = a.DestructiveReason
+		}
+		groups[g] = append(groups[g], entry)
 	}
 
 	for _, g := range groupOrder {
 		_, _ = fmt.Fprintf(w, "  %s\n", g)
 		for _, e := range groups[g] {
 			_, _ = fmt.Fprintf(w, "    %s %s\n", e.symbol, e.desc)
+			if e.reason != "" {
+				_, _ = fmt.Fprintf(w, "        destructive: %s\n", e.reason)
+			}
 		}
 	}
 }

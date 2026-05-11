@@ -50,31 +50,31 @@ func (t Type) String() string {
 
 // Action is an inert description of a change to apply.
 type Action struct {
-	Type              Type
-	Group             string // resource group for display; set by engine from decl type (e.g. "File", "Package")
-	Path              string
-	Description       string
-	Recursive         bool         // DeletePath: use os.RemoveAll instead of os.Remove
-	Content           []byte       // WriteFile
-	Mode              fs.FileMode  // WriteFile, CreateDir, SetPermissions
-	LinkTarget        string       // CreateSymlink
-	PackageName       string       // InstallPackage
-	DefaultsDomain    string       // SetDefaults
-	DefaultsKey       string       // SetDefaults
-	DefaultsValue     any          // SetDefaults
-	DefaultsValueType string       // SetDefaults
-	DockApps          []string     // SetDock
-	DockFolders       []DockFolder // SetDock
-	GitURL            string       // CloneRepo, PullRepo
-	GitBranch         string       // CloneRepo, PullRepo
-	FontSource        string       // InstallFont: source file path
-	FontDest          string       // InstallFont: destination file path
-	MiseToolName      string       // InstallMiseTool
-	MiseToolVersion   string       // InstallMiseTool
-	ShellPath         string       // SetShell
-	ShellUsername     string       // SetShell
-	MasAppID          int64            // InstallMasApp
-	MasAppName        string           // InstallMasApp
+	Type                   Type
+	Group                  string // resource group for display; set by engine from decl type (e.g. "File", "Package")
+	Path                   string
+	Description            string
+	Recursive              bool            // DeletePath: use os.RemoveAll instead of os.Remove
+	Content                []byte          // WriteFile
+	Mode                   fs.FileMode     // WriteFile, CreateDir, SetPermissions
+	LinkTarget             string          // CreateSymlink
+	PackageName            string          // InstallPackage
+	DefaultsDomain         string          // SetDefaults
+	DefaultsKey            string          // SetDefaults
+	DefaultsValue          any             // SetDefaults
+	DefaultsValueType      string          // SetDefaults
+	DockApps               []string        // SetDock
+	DockFolders            []DockFolder    // SetDock
+	GitURL                 string          // CloneRepo, PullRepo
+	GitBranch              string          // CloneRepo, PullRepo
+	FontSource             string          // InstallFont: source file path
+	FontDest               string          // InstallFont: destination file path
+	MiseToolName           string          // InstallMiseTool
+	MiseToolVersion        string          // InstallMiseTool
+	ShellPath              string          // SetShell
+	ShellUsername          string          // SetShell
+	MasAppID               int64           // InstallMasApp
+	MasAppName             string          // InstallMasApp
 	KeyRemaps              []KeyRemapEntry // SetKeyRemap
 	DisplaySidebarIconSize string          // SetDisplay: "small", "medium", "large"
 	DisplayMenuBarSpacing  string          // SetDisplay: "compact", "default"
@@ -83,6 +83,15 @@ type Action struct {
 	ScriptName             string          // RunScript: tool name
 	ScriptInstall          string          // RunScript: shell command to run
 	NeedsSudo              bool            // action requires privilege escalation
+
+	// Destructive flags an action that would irrevocably destroy user content
+	// that crucible did not itself create — for example, removing a regular
+	// file or directory at a path where the user has now declared a symlink.
+	// Destructive actions get a separate confirmation step in the apply flow
+	// and are visually distinct in plan output. DestructiveReason carries a
+	// human-readable explanation of what will be lost.
+	Destructive       bool
+	DestructiveReason string
 }
 
 // AllTypes returns every registered action Type, sorted by ordinal.

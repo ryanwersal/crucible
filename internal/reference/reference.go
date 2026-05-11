@@ -131,6 +131,11 @@ Options:
 Example:
   c.symlink("~/.vimrc", { target: "~/.config/nvim/init.vim" })
 
+If a regular file or directory already occupies the path, crucible plans the
+removal as a destructive operation and apply will refuse to proceed without an
+explicit second confirmation (regardless of --yes). The deletion is permanent —
+crucible does not back up overwritten content.
+
 ## c.brew(packages, options?)
 
 Declare Homebrew packages. Accepts a single string or array of strings.
