@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ryanwersal/crucible/internal/action"
 	"github.com/ryanwersal/crucible/internal/fact"
 	"github.com/ryanwersal/crucible/internal/script/decl"
 )
@@ -16,6 +17,7 @@ func TestMiseToolHandler_PlanBatch(t *testing.T) {
 		name            string
 		decls           []decl.Declaration
 		miseInfo        *fact.MiseInfo
+		resolver        action.MiseVersionResolver
 		wantActions     int
 		wantObs         int
 		wantObsContains string
@@ -49,6 +51,17 @@ func TestMiseToolHandler_PlanBatch(t *testing.T) {
 			wantObs:         1,
 			wantObsContains: "already absent",
 		},
+		{
+			name: "latest spec already satisfied — observation, no action",
+			decls: []decl.Declaration{
+				{Type: decl.MiseTool, MiseToolName: "github-cli", MiseToolVersion: "latest"},
+			},
+			miseInfo:        &fact.MiseInfo{Available: true, Globals: map[string]string{"github-cli": "2.92.0"}},
+			resolver:        stubResolver{resolutions: map[string]string{"github-cli@latest": "2.92.0"}},
+			wantActions:     0,
+			wantObs:         1,
+			wantObsContains: "github-cli@latest (installed)",
+		},
 	}
 
 	for _, tt := range tests {
@@ -59,7 +72,7 @@ func TestMiseToolHandler_PlanBatch(t *testing.T) {
 			// Pre-populate the store with mise info so the handler doesn't shell out.
 			_, _ = fact.Get(context.Background(), store, "mise", stubMiseCollector{info: tt.miseInfo})
 
-			handler := MiseToolHandler{}
+			handler := MiseToolHandler{Resolver: tt.resolver}
 			out, err := handler.PlanBatch(context.Background(), store, Env{}, tt.decls)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
@@ -86,4 +99,16 @@ type stubMiseCollector struct {
 
 func (s stubMiseCollector) Collect(_ context.Context) (*fact.MiseInfo, error) {
 	return s.info, nil
+}
+
+// stubResolver returns pre-configured spec resolutions without shelling out.
+type stubResolver struct {
+	resolutions map[string]string
+}
+
+func (s stubResolver) Resolve(_ context.Context, name, spec string) (string, error) {
+	if r, ok := s.resolutions[name+"@"+spec]; ok {
+		return r, nil
+	}
+	return spec, nil
 }

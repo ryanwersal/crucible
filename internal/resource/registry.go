@@ -160,7 +160,7 @@ func newDefaultRegistry() *Registry {
 	// Batch handlers
 	r.RegisterBatchHandler(PackageHandler{})
 	r.RegisterBatchHandler(FontHandler{})
-	r.RegisterBatchHandler(MiseToolHandler{})
+	r.RegisterBatchHandler(MiseToolHandler{Resolver: fact.MiseResolver{}})
 	r.RegisterBatchHandler(MasHandler{})
 
 	// Action executors

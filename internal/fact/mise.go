@@ -35,6 +35,30 @@ func (c MiseCollector) Collect(ctx context.Context) (*MiseInfo, error) {
 	return &MiseInfo{Available: true, Globals: globals}, nil
 }
 
+// MiseResolver resolves a mise version spec (e.g. "latest", "2", "2.92") to a
+// concrete version by shelling out to `mise latest <name>@<spec>`. This lets
+// callers distinguish "installed but spec implies a newer version" from
+// "installed and already up to date for this spec".
+type MiseResolver struct{}
+
+// Resolve returns the concrete version mise would install for spec.
+// An empty spec is treated as "latest".
+func (MiseResolver) Resolve(ctx context.Context, name, spec string) (string, error) {
+	misePath, err := exec.LookPath("mise")
+	if err != nil {
+		return "", err
+	}
+	arg := name
+	if spec != "" {
+		arg = name + "@" + spec
+	}
+	out, err := exec.CommandContext(ctx, misePath, "latest", arg).Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // parseMiseLsOutput parses the output of `mise ls --global --installed`.
 // Each line has the format: "tool  version  ..." — we extract the tool name and version.
 func parseMiseLsOutput(out []byte) map[string]string {

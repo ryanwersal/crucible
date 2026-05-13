@@ -10,12 +10,16 @@ import (
 )
 
 // MiseToolHandler batches all mise tool declarations into a single diff.
-type MiseToolHandler struct{}
+// The Resolver is consulted to expand non-concrete specs like "latest" or "2"
+// before deciding whether an installed tool is already up to date.
+type MiseToolHandler struct {
+	Resolver action.MiseVersionResolver
+}
 
 func (MiseToolHandler) DeclType() decl.Type { return decl.MiseTool }
 func (MiseToolHandler) DeclName() string    { return "MiseTool" }
 
-func (MiseToolHandler) PlanBatch(ctx context.Context, store *fact.Store, env Env, decls []decl.Declaration) (PlanOutput, error) {
+func (h MiseToolHandler) PlanBatch(ctx context.Context, store *fact.Store, env Env, decls []decl.Declaration) (PlanOutput, error) {
 	tools := make([]action.DesiredMiseTool, len(decls))
 	for i, d := range decls {
 		tools[i] = action.DesiredMiseTool{
@@ -29,7 +33,7 @@ func (MiseToolHandler) PlanBatch(ctx context.Context, store *fact.Store, env Env
 	if err != nil {
 		return PlanOutput{}, err
 	}
-	miseActions, err := action.DiffMise(tools, miseFact)
+	miseActions, err := action.DiffMise(ctx, tools, miseFact, h.Resolver)
 	if err != nil {
 		return PlanOutput{}, err
 	}
