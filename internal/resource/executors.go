@@ -120,6 +120,18 @@ func (UninstallPackageExecutor) Execute(ctx context.Context, a action.Action, st
 	return runCmd(ctx, a, stdin, stdout, stderr, "brew", "uninstall", a.PackageName)
 }
 
+// UpgradePackageExecutor upgrades an installed Homebrew package to its
+// current version. `brew upgrade <name>` works for both formulae and casks
+// without needing to specify which.
+type UpgradePackageExecutor struct{}
+
+func (UpgradePackageExecutor) ActionType() action.Type { return action.UpgradePackage }
+func (UpgradePackageExecutor) ActionName() string      { return "UpgradePackage" }
+
+func (UpgradePackageExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
+	return runCmd(ctx, a, stdin, stdout, stderr, "brew", "upgrade", a.PackageName)
+}
+
 // SetDefaultsExecutor writes a macOS defaults value.
 type SetDefaultsExecutor struct{}
 

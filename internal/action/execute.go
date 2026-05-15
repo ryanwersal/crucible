@@ -46,6 +46,8 @@ func Execute(ctx context.Context, a Action, stdout, stderr io.Writer) error {
 		return executeSetShell(ctx, a)
 	case UninstallPackage:
 		return executeUninstallPackage(ctx, a, stdout, stderr)
+	case UpgradePackage:
+		return executeUpgradePackage(ctx, a, stdout, stderr)
 	case UninstallMiseTool:
 		return executeUninstallMiseTool(ctx, a, stdout, stderr)
 	case DeleteDefaults:
@@ -203,6 +205,13 @@ func executeSetShell(ctx context.Context, a Action) error {
 
 func executeUninstallPackage(ctx context.Context, a Action, stdout, stderr io.Writer) error {
 	cmd := exec.CommandContext(ctx, "brew", "uninstall", a.PackageName)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	return cmd.Run()
+}
+
+func executeUpgradePackage(ctx context.Context, a Action, stdout, stderr io.Writer) error {
+	cmd := exec.CommandContext(ctx, "brew", "upgrade", a.PackageName)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	return cmd.Run()

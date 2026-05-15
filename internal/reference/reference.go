@@ -141,10 +141,25 @@ crucible does not back up overwritten content.
 Declare Homebrew packages. Accepts a single string or array of strings.
 Supports tap syntax for third-party formulae (e.g. "user/tap/formula").
 
+Options:
+- state: "present" (default) — install if missing
+- state: "absent" — uninstall if present
+- state: "latest" — install if missing AND upgrade if outdated
+
+` + "`state: \"latest\"`" + ` runs ` + "`brew upgrade <pkg>`" + ` when the current upstream
+version differs from the installed version. Pinned formulae and casks that
+update themselves (` + "`auto_updates`" + `) are skipped with an informational note
+in the plan.
+
+By default ` + "`crucible apply`" + ` runs ` + "`brew update`" + ` before computing outdated
+packages so the comparison uses fresh tap data. Pass ` + "`--no-refresh`" + ` to skip
+the update for faster repeat plans or offline use.
+
 Examples:
   c.brew("ripgrep")
   c.brew(["ripgrep", "fd", "bat"])
   c.brew("ripgrep", { state: "absent" })
+  c.brew(["ripgrep", "fd"], { state: "latest" })
 
 ## c.defaults(domain, key, value) / c.defaults(domain, object)
 
@@ -308,6 +323,11 @@ Pre-collected Homebrew state object:
 - available: boolean — whether brew is installed
 - formulae: string[] — installed formula names
 - casks: string[] — installed cask names
+- outdated: object — map keyed by canonical package name (one entry per
+  outdated package, regardless of how many aliases it has) →
+  { name, installedVersion, currentVersion, isCask, pinned, autoUpdates }.
+  Populated when ` + "`crucible apply`" + ` has refreshed the tap index (default;
+  ` + "`--no-refresh`" + ` skips the refresh).
 
 ## c.facts.file(path)
 
@@ -418,6 +438,7 @@ var actionTypeDescriptions = map[action.Type]string{
 	action.SetPermissions:    "Set file or directory permissions",
 	action.DeletePath:        "Remove a file, directory, or symlink",
 	action.InstallPackage:    "Install a Homebrew package",
+	action.UpgradePackage:    "Upgrade an installed Homebrew package to the current version",
 	action.SetDefaults:       "Write a macOS defaults key",
 	action.SetDock:           "Set the macOS Dock layout",
 	action.CloneRepo:         "Clone a git repository",

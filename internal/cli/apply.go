@@ -23,6 +23,7 @@ func newApplyCmd(opts *rootOpts) *cobra.Command {
 		yes         bool
 		scriptFile  string
 		concurrency int
+		noRefresh   bool
 	)
 
 	cmd := &cobra.Command{
@@ -50,6 +51,9 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 			eng := engine.New(sourceDir, opts.target, logger)
 			if scriptFile != "" {
 				eng.SetScriptFile(scriptFile)
+			}
+			if noRefresh {
+				eng.SetHomebrewRefresh(false)
 			}
 			w := cmd.OutOrStdout()
 
@@ -147,6 +151,7 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompt")
 	cmd.Flags().StringVarP(&scriptFile, "file", "f", "", "path to a crucible.js script (default: ./crucible.js)")
 	cmd.Flags().IntVar(&concurrency, "concurrency", 4, "max parallel actions (1 for sequential)")
+	cmd.Flags().BoolVar(&noRefresh, "no-refresh", false, "skip `brew update` before computing outdated packages")
 	return cmd
 }
 

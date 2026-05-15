@@ -14,6 +14,7 @@ type State int
 const (
 	Present State = iota // zero value = backward compatible
 	Absent
+	Latest // installed AND at the current upstream version
 )
 
 // Type identifies what a script declaration manages.

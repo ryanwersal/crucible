@@ -69,6 +69,30 @@ func (m *CrucibleModule) isAbsent(opts *goja.Object) bool {
 	return v.String() == "absent"
 }
 
+// parsePackageState returns the desired state for a c.brew() options object.
+// Accepts "present" (default), "absent", or "latest"; any other value panics
+// with a JS-visible error so script authors learn immediately rather than
+// silently getting the default.
+func (m *CrucibleModule) parsePackageState(opts *goja.Object) decl.State {
+	if opts == nil {
+		return decl.Present
+	}
+	v := opts.Get("state")
+	if v == nil || goja.IsUndefined(v) {
+		return decl.Present
+	}
+	switch v.String() {
+	case "", "present":
+		return decl.Present
+	case "absent":
+		return decl.Absent
+	case "latest":
+		return decl.Latest
+	default:
+		panic(m.vm.NewGoError(fmt.Errorf("brew(): unknown state %q; valid values: present, absent, latest", v.String())))
+	}
+}
+
 // expandPath resolves ~ to the target directory and cleans the path.
 func (m *CrucibleModule) expandPath(path string) string {
 	if strings.HasPrefix(path, "~/") {
@@ -192,6 +216,8 @@ func (m *CrucibleModule) symlink(call goja.FunctionCall) goja.Value {
 //
 //	c.brew("ryanwersal/tools/helios")
 //	c.brew(["ripgrep", "fd", "bat"])
+//	c.brew(["ripgrep"], { state: "latest" })  // keep at current version
+//	c.brew(["wget"], { state: "absent" })     // uninstall
 func (m *CrucibleModule) brew(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		panic(m.vm.NewGoError(fmt.Errorf("brew() requires a package name argument")))
@@ -200,9 +226,7 @@ func (m *CrucibleModule) brew(call goja.FunctionCall) goja.Value {
 	var state decl.State
 	if len(call.Arguments) >= 2 {
 		opts := call.Arguments[1].ToObject(m.vm)
-		if m.isAbsent(opts) {
-			state = decl.Absent
-		}
+		state = m.parsePackageState(opts)
 	}
 
 	exported := call.Arguments[0].Export()

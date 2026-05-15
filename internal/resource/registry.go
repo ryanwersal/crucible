@@ -171,6 +171,7 @@ func newDefaultRegistry() *Registry {
 	r.RegisterExecutor(DeletePathExecutor{})
 	r.RegisterExecutor(InstallPackageExecutor{})
 	r.RegisterExecutor(UninstallPackageExecutor{})
+	r.RegisterExecutor(UpgradePackageExecutor{})
 	r.RegisterExecutor(SetDefaultsExecutor{})
 	r.RegisterExecutor(DeleteDefaultsExecutor{})
 	r.RegisterExecutor(SetDockExecutor{})

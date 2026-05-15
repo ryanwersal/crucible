@@ -22,14 +22,15 @@ import (
 
 // Engine implements the two-phase plan/apply pipeline.
 type Engine struct {
-	sourceDir  string
-	targetDir  string
-	scriptFile string // optional explicit script path; overrides crucible.js discovery
-	logger     *slog.Logger
-	stdin      io.Reader
-	stdout     io.Writer
-	stderr     io.Writer
-	registry   *resource.Registry
+	sourceDir       string
+	targetDir       string
+	scriptFile      string // optional explicit script path; overrides crucible.js discovery
+	logger          *slog.Logger
+	stdin           io.Reader
+	stdout          io.Writer
+	stderr          io.Writer
+	registry        *resource.Registry
+	homebrewRefresh bool // run `brew update` during fact collection
 }
 
 // New creates an Engine that maps sourceDir files onto targetDir.
@@ -44,14 +45,22 @@ func New(sourceDir, targetDir string, logger *slog.Logger) *Engine {
 		targetDir = abs
 	}
 	return &Engine{
-		sourceDir: sourceDir,
-		targetDir: targetDir,
-		logger:    logger,
-		stdin:     os.Stdin,
-		stdout:    os.Stdout,
-		stderr:    os.Stderr,
-		registry:  resource.DefaultRegistry(),
+		sourceDir:       sourceDir,
+		targetDir:       targetDir,
+		logger:          logger,
+		stdin:           os.Stdin,
+		stdout:          os.Stdout,
+		stderr:          os.Stderr,
+		registry:        resource.DefaultRegistry(),
+		homebrewRefresh: true,
 	}
+}
+
+// SetHomebrewRefresh controls whether `brew update` runs during fact
+// collection to refresh the tap index before computing outdated packages.
+// Default is true; turn off for offline or repeat-plan iterations.
+func (e *Engine) SetHomebrewRefresh(refresh bool) {
+	e.homebrewRefresh = refresh
 }
 
 // SetInput configures the reader used for subprocess stdin during Apply.
@@ -105,7 +114,7 @@ func (e *Engine) planScript(ctx context.Context, store *fact.Store, scriptConten
 		return err
 	})
 	g.Go(func() error {
-		_, err := fact.Get(gctx, store, "homebrew", fact.HomebrewCollector{})
+		_, err := fact.Get(gctx, store, "homebrew", fact.HomebrewCollector{Refresh: e.homebrewRefresh})
 		return err
 	})
 	g.Go(func() error {

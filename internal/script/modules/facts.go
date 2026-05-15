@@ -71,6 +71,29 @@ func (m *FactsModule) homebrewObject() *goja.Object {
 		casks = append(casks, name)
 	}
 	_ = obj.Set("casks", casks)
+
+	// outdated[canonical-name] -> { installedVersion, currentVersion, isCask, pinned, autoUpdates }.
+	// The Go-internal Outdated map keys each entry under every alias of the
+	// package (canonical, full, aliases, oldnames) for lookup convenience.
+	// JS gets the canonical view so Object.keys() returns one entry per
+	// package — iteration matches what a user expects.
+	outdated := m.vm.NewObject()
+	seen := make(map[string]bool, len(brewInfo.Outdated))
+	for _, p := range brewInfo.Outdated {
+		if p.Name == "" || seen[p.Name] {
+			continue
+		}
+		seen[p.Name] = true
+		entry := m.vm.NewObject()
+		_ = entry.Set("name", p.Name)
+		_ = entry.Set("installedVersion", p.InstalledVersion)
+		_ = entry.Set("currentVersion", p.CurrentVersion)
+		_ = entry.Set("isCask", p.IsCask)
+		_ = entry.Set("pinned", p.Pinned)
+		_ = entry.Set("autoUpdates", p.AutoUpdates)
+		_ = outdated.Set(p.Name, entry)
+	}
+	_ = obj.Set("outdated", outdated)
 	return obj
 }
 

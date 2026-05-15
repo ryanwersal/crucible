@@ -551,6 +551,50 @@ func TestBrew_Absent(t *testing.T) {
 	}
 }
 
+func TestBrew_Latest(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.brew(["ripgrep", "fd"], { state: "latest" })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(*decls) != 2 {
+		t.Fatalf("expected 2 declarations, got %d", len(*decls))
+	}
+	for i, d := range *decls {
+		if d.State != decl.Latest {
+			t.Errorf("[%d] state = %v, want Latest", i, d.State)
+		}
+	}
+}
+
+func TestBrew_StatePresentExplicit(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.brew("ripgrep", { state: "present" })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d := (*decls)[0]
+	if d.State != decl.Present {
+		t.Errorf("state = %v, want Present", d.State)
+	}
+}
+
+func TestBrew_StateInvalid(t *testing.T) {
+	t.Parallel()
+	vm, _ := setupModule(t)
+
+	_, err := vm.RunString(`c.brew("ripgrep", { state: "later" })`)
+	if err == nil {
+		t.Fatal("expected error for unknown state")
+	}
+}
+
 func TestBrew_AbsentArray(t *testing.T) {
 	t.Parallel()
 	vm, decls := setupModule(t)
