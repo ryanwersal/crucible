@@ -271,11 +271,12 @@ type indexedAction struct {
 }
 
 func (e *Engine) runConcurrent(ctx context.Context, actions []indexedAction, results []ActionResult, opts ApplyOptions) {
-	// Group actions that touch the same Path into ordered chains so that pairs
-	// like (DeletePath, CreateSymlink) for one path don't race. Chains are
-	// executed concurrently with respect to each other; actions within a chain
-	// run sequentially in plan order.
-	chains := groupByPath(actions)
+	// Group actions into chains that must execute sequentially. Two reasons
+	// to chain: same Path (e.g. DeletePath then CreateSymlink for one path
+	// must not race), or shared SerialGroup (e.g. Homebrew commands take
+	// exclusive locks on shared Cellar deps and corrupt state when run
+	// concurrently). Chains run in parallel with respect to each other.
+	chains := groupChains(actions)
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(opts.Concurrency)
@@ -313,26 +314,41 @@ func (e *Engine) runConcurrent(ctx context.Context, actions []indexedAction, res
 	_ = g.Wait()
 }
 
-// groupByPath partitions actions into chains that must execute sequentially.
-// Actions sharing a non-empty Path go into the same chain in plan order;
-// actions with an empty Path (or a unique Path) each form a singleton chain.
-func groupByPath(actions []indexedAction) [][]indexedAction {
+// groupChains partitions actions into chains that must execute sequentially.
+// Actions sharing a non-empty Path or SerialGroup go into the same chain in
+// plan order; actions with neither each form a singleton chain. SerialGroup
+// takes precedence when both are set, so a tool with global locks (Homebrew)
+// fully serializes regardless of any per-action Path.
+func groupChains(actions []indexedAction) [][]indexedAction {
 	var chains [][]indexedAction
-	chainByPath := make(map[string]int, len(actions))
+	chainByKey := make(map[string]int, len(actions))
 	for _, ia := range actions {
-		path := ia.action.Path
-		if path == "" {
+		key := chainKey(ia.action)
+		if key == "" {
 			chains = append(chains, []indexedAction{ia})
 			continue
 		}
-		if idx, ok := chainByPath[path]; ok {
+		if idx, ok := chainByKey[key]; ok {
 			chains[idx] = append(chains[idx], ia)
 		} else {
-			chainByPath[path] = len(chains)
+			chainByKey[key] = len(chains)
 			chains = append(chains, []indexedAction{ia})
 		}
 	}
 	return chains
+}
+
+// chainKey returns the grouping key for an action. SerialGroup takes
+// precedence over Path because it expresses a stronger constraint (a global
+// lock rather than a single filesystem location).
+func chainKey(a action.Action) string {
+	if a.SerialGroup != "" {
+		return "serial:" + a.SerialGroup
+	}
+	if a.Path != "" {
+		return "path:" + a.Path
+	}
+	return ""
 }
 
 // observerWriter is an io.Writer that splits output into lines and feeds

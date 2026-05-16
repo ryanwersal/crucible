@@ -7,6 +7,12 @@ import (
 	"github.com/ryanwersal/crucible/internal/fact"
 )
 
+// homebrewSerialGroup is the SerialGroup tag for all brew install/uninstall/
+// upgrade actions. Brew operations contend on shared Cellar paths (readline,
+// ca-certificates, and other common deps) and corrupt their lockfiles when
+// run concurrently — so they all chain together regardless of package name.
+const homebrewSerialGroup = "homebrew"
+
 // DesiredPackage describes a Homebrew package that should be installed,
 // removed, or kept up to date.
 type DesiredPackage struct {
@@ -38,6 +44,7 @@ func DiffHomebrew(desired []DesiredPackage, actual *fact.HomebrewInfo) ([]Action
 					Type:        UninstallPackage,
 					PackageName: pkg.Name,
 					Description: fmt.Sprintf("brew uninstall %s", pkg.Name),
+					SerialGroup: homebrewSerialGroup,
 				})
 				noted[pkg.Name] = true
 			}
@@ -49,6 +56,7 @@ func DiffHomebrew(desired []DesiredPackage, actual *fact.HomebrewInfo) ([]Action
 				Type:        InstallPackage,
 				PackageName: pkg.Name,
 				Description: fmt.Sprintf("brew install %s", pkg.Name),
+				SerialGroup: homebrewSerialGroup,
 			})
 			noted[pkg.Name] = true
 			continue
@@ -84,6 +92,7 @@ func DiffHomebrew(desired []DesiredPackage, actual *fact.HomebrewInfo) ([]Action
 			PackageCurrentVersion:   out.CurrentVersion,
 			Description: fmt.Sprintf("brew upgrade %s (%s → %s)",
 				pkg.Name, out.InstalledVersion, out.CurrentVersion),
+			SerialGroup: homebrewSerialGroup,
 		})
 		noted[pkg.Name] = true
 	}

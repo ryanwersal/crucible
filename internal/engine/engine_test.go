@@ -371,38 +371,49 @@ func TestApplyResultWithOptions_SamePathSerializes(t *testing.T) {
 	}
 }
 
-func TestGroupByPath(t *testing.T) {
+func TestGroupChains(t *testing.T) {
 	t.Parallel()
 
-	mk := func(idx int, path, desc string) indexedAction {
-		return indexedAction{index: idx, action: action.Action{Path: path, Description: desc}}
+	mk := func(idx int, path, serial, desc string) indexedAction {
+		return indexedAction{index: idx, action: action.Action{Path: path, SerialGroup: serial, Description: desc}}
 	}
 
 	in := []indexedAction{
-		mk(0, "/a", "a1"),
-		mk(1, "", "noPath-1"),
-		mk(2, "/a", "a2"),
-		mk(3, "/b", "b1"),
-		mk(4, "", "noPath-2"),
-		mk(5, "/a", "a3"),
+		mk(0, "/a", "", "a1"),
+		mk(1, "", "", "noKey-1"),
+		mk(2, "/a", "", "a2"),
+		mk(3, "/b", "", "b1"),
+		mk(4, "", "", "noKey-2"),
+		mk(5, "/a", "", "a3"),
+		mk(6, "", "homebrew", "brew1"),
+		mk(7, "", "homebrew", "brew2"),
+		mk(8, "/c", "homebrew", "brew3-with-path"),
 	}
 
-	got := groupByPath(in)
+	got := groupChains(in)
 
-	if len(got) != 4 {
-		t.Fatalf("expected 4 chains, got %d: %+v", len(got), got)
+	if len(got) != 5 {
+		t.Fatalf("expected 5 chains, got %d: %+v", len(got), got)
 	}
 	// Chain 0: all /a actions, in plan order.
 	if len(got[0]) != 3 || got[0][0].action.Description != "a1" ||
 		got[0][1].action.Description != "a2" || got[0][2].action.Description != "a3" {
 		t.Errorf("chain[0] = %+v, want [a1 a2 a3] in order", descs(got[0]))
 	}
-	// Singleton chains for empty-path and unique-path actions.
-	for i, want := range []string{"noPath-1", "b1", "noPath-2"} {
+	// Singleton chains for empty-key and unique-path actions.
+	for i, want := range []string{"noKey-1", "b1", "noKey-2"} {
 		chain := got[i+1]
 		if len(chain) != 1 || chain[0].action.Description != want {
 			t.Errorf("chain[%d] = %v, want singleton %q", i+1, descs(chain), want)
 		}
+	}
+	// Last chain: all homebrew-tagged actions, in plan order. SerialGroup
+	// takes precedence over Path (so brew3-with-path joins the brew chain
+	// instead of forming a /c-keyed singleton).
+	brew := got[4]
+	if len(brew) != 3 || brew[0].action.Description != "brew1" ||
+		brew[1].action.Description != "brew2" || brew[2].action.Description != "brew3-with-path" {
+		t.Errorf("brew chain = %v, want [brew1 brew2 brew3-with-path]", descs(brew))
 	}
 }
 
