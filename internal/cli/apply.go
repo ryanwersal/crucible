@@ -55,6 +55,9 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 			if noRefresh {
 				eng.SetHomebrewRefresh(false)
 			}
+			if opts.configureEngine != nil {
+				opts.configureEngine(eng)
+			}
 			w := cmd.OutOrStdout()
 
 			result, err := eng.Plan(cmd.Context())

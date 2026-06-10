@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/ryanwersal/crucible/internal/engine"
 	"github.com/spf13/cobra"
 )
 
@@ -16,6 +17,10 @@ type rootOpts struct {
 	// home directory.
 	source string
 	target string
+
+	// configureEngine is an optional hook for tests to customize the engine
+	// before it runs (e.g. inject stub facts). Production callers leave it nil.
+	configureEngine func(*engine.Engine)
 }
 
 // NewRootCmd creates the root crucible command with production defaults.

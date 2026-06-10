@@ -8,7 +8,15 @@ import (
 	"log/slog"
 	"os/exec"
 	"strings"
+	"sync"
 )
+
+// brewMu serializes brew CLI invocations within a single process. Brew takes
+// exclusive filesystem locks on shared state (tap index, Cellar) for update
+// and even read-side commands can conflict with a concurrent update, so any
+// two goroutines calling brew in parallel risk one failing with a lockf error.
+// This mirrors the SerialGroup mechanism that Homebrew *actions* already use.
+var brewMu sync.Mutex
 
 // HomebrewInfo holds the observed state of Homebrew packages.
 type HomebrewInfo struct {
@@ -42,6 +50,9 @@ func (h HomebrewCollector) Collect(ctx context.Context) (*HomebrewInfo, error) {
 		return &HomebrewInfo{Available: false}, nil
 	}
 
+	brewMu.Lock()
+	defer brewMu.Unlock()
+
 	if h.Refresh {
 		// brew update is network-dependent; treat failure as a warning so that
 		// offline runs still produce a useful (if possibly stale) plan. Capture
@@ -55,8 +66,7 @@ func (h HomebrewCollector) Collect(ctx context.Context) (*HomebrewInfo, error) {
 		}
 	}
 
-	infoCmd := exec.CommandContext(ctx, brewPath, "info", "--json=v2", "--installed")
-	infoOut, err := infoCmd.Output()
+	infoOut, err := runBrew(ctx, brewPath, "info", "--json=v2", "--installed")
 	if err != nil {
 		return nil, fmt.Errorf("brew info: %w", err)
 	}
@@ -70,8 +80,7 @@ func (h HomebrewCollector) Collect(ctx context.Context) (*HomebrewInfo, error) {
 	// --greedy includes casks that auto-update themselves (e.g. Chrome). We
 	// detect those via the auto_updates flag from `brew info` so they can
 	// be surfaced as informational rows instead of attempted upgrades.
-	outdatedCmd := exec.CommandContext(ctx, brewPath, "outdated", "--json=v2", "--greedy")
-	outdatedOut, err := outdatedCmd.Output()
+	outdatedOut, err := runBrew(ctx, brewPath, "outdated", "--json=v2", "--greedy")
 	if err != nil {
 		return nil, fmt.Errorf("brew outdated: %w", err)
 	}
@@ -82,6 +91,23 @@ func (h HomebrewCollector) Collect(ctx context.Context) (*HomebrewInfo, error) {
 	}
 
 	return info, nil
+}
+
+// runBrew runs a brew subcommand and returns stdout. On non-zero exit the
+// error wraps stderr so callers see *why* brew failed (lock contention, tap
+// error, etc.) instead of an opaque "exit status 1".
+func runBrew(ctx context.Context, brewPath string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, brewPath, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return nil, fmt.Errorf("%w: %s", err, msg)
+		}
+		return nil, err
+	}
+	return stdout.Bytes(), nil
 }
 
 // installContext carries info derived from `brew info` that the outdated

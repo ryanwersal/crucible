@@ -5,9 +5,31 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/ryanwersal/crucible/internal/engine"
+	"github.com/ryanwersal/crucible/internal/fact"
 )
+
+// stubFacts seeds os/homebrew/mas with empty fixture values so the engine
+// skips shelling out to real system tools. Most CLI tests use this — they
+// exercise CLI plumbing, not fact collection, and hitting real brew makes
+// them slow and racy. A small number of integration tests skip this hook
+// to retain end-to-end coverage of the real fact path.
+func stubFacts(e *engine.Engine) {
+	store := fact.NewStore()
+	fact.Set(store, "os", &fact.OSInfo{OS: runtime.GOOS, Arch: runtime.GOARCH})
+	fact.Set(store, "homebrew", &fact.HomebrewInfo{
+		Available: false,
+		Formulae:  map[string]bool{},
+		Casks:     map[string]bool{},
+		Outdated:  map[string]fact.OutdatedPackage{},
+	})
+	fact.Set(store, "mas", &fact.MasInfo{Available: false, Apps: map[int64]string{}})
+	e.SetFactStore(store)
+}
 
 // testCmd builds a root command with source/target pointed at temp dirs.
 func testCmd(t *testing.T) (*bytes.Buffer, *bytes.Buffer, func(args ...string) error) {
@@ -17,25 +39,19 @@ func testCmd(t *testing.T) (*bytes.Buffer, *bytes.Buffer, func(args ...string) e
 	return testCmdDirs(src, tgt)
 }
 
-// testCmdWithScript builds a root command with an empty crucible.js in the source dir.
-func testCmdWithScript(t *testing.T) (string, string, *bytes.Buffer, *bytes.Buffer, func(args ...string) error) {
-	t.Helper()
-	src := t.TempDir()
-	tgt := t.TempDir()
-	if err := os.WriteFile(filepath.Join(src, "crucible.js"), []byte(`// empty`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	stdout, stderr, run := testCmdDirs(src, tgt)
-	return src, tgt, stdout, stderr, run
-}
-
 func testCmdDirs(src, tgt string) (*bytes.Buffer, *bytes.Buffer, func(args ...string) error) {
-	return testCmdDirsWithStdin(src, tgt, nil)
+	return testCmdDirsWithOpts(src, tgt, nil, stubFacts)
 }
 
 func testCmdDirsWithStdin(src, tgt string, stdin io.Reader) (*bytes.Buffer, *bytes.Buffer, func(args ...string) error) {
+	return testCmdDirsWithOpts(src, tgt, stdin, stubFacts)
+}
+
+// testCmdDirsWithOpts is the underlying helper; pass configureEngine=nil to
+// exercise the real fact-collection path (integration tests only).
+func testCmdDirsWithOpts(src, tgt string, stdin io.Reader, configureEngine func(*engine.Engine)) (*bytes.Buffer, *bytes.Buffer, func(args ...string) error) {
 	var stdout, stderr bytes.Buffer
-	opts := &rootOpts{source: src, target: tgt}
+	opts := &rootOpts{source: src, target: tgt, configureEngine: configureEngine}
 	cmd := buildRootCmd(opts)
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
@@ -49,9 +65,18 @@ func testCmdDirsWithStdin(src, tgt string, stdin io.Reader) (*bytes.Buffer, *byt
 	return &stdout, &stderr, run
 }
 
+// TestApplyCmd_DryRun_UpToDate runs against real fact collection (no stubbed
+// fact store). This is one of two integration tests that exercise the real
+// brew/mas/os pipeline end-to-end; the rest of the CLI tests stub facts so
+// they only cover CLI plumbing. Not parallel: real-brew tests are slow and
+// there's no value in interleaving them.
 func TestApplyCmd_DryRun_UpToDate(t *testing.T) {
-	t.Parallel()
-	_, _, stdout, _, run := testCmdWithScript(t)
+	src := t.TempDir()
+	tgt := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "crucible.js"), []byte(`// empty`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, run := testCmdDirsWithOpts(src, tgt, nil, nil)
 
 	if err := run("apply", "--dry-run"); err != nil {
 		t.Fatal(err)
@@ -116,8 +141,11 @@ func TestApplyCmd_DryRun_NoChanges(t *testing.T) {
 	}
 }
 
+// TestApplyCmd_CreatesFiles runs against real fact collection (no stubbed
+// fact store) and exercises the full apply path, not just plan. Paired with
+// TestApplyCmd_DryRun_UpToDate to keep the real brew/mas/os pipeline covered.
+// Not parallel: see the rationale on TestApplyCmd_DryRun_UpToDate.
 func TestApplyCmd_CreatesFiles(t *testing.T) {
-	t.Parallel()
 	src := t.TempDir()
 	tgt := t.TempDir()
 
@@ -129,7 +157,7 @@ func TestApplyCmd_CreatesFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, run := testCmdDirs(src, tgt)
+	_, _, run := testCmdDirsWithOpts(src, tgt, nil, nil)
 
 	if err := run("apply", "--yes"); err != nil {
 		t.Fatal(err)

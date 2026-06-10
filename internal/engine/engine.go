@@ -30,7 +30,8 @@ type Engine struct {
 	stdout          io.Writer
 	stderr          io.Writer
 	registry        *resource.Registry
-	homebrewRefresh bool // run `brew update` during fact collection
+	homebrewRefresh bool        // run `brew update` during fact collection
+	factStore       *fact.Store // optional pre-populated store; tests inject stub facts here
 }
 
 // New creates an Engine that maps sourceDir files onto targetDir.
@@ -63,6 +64,13 @@ func (e *Engine) SetHomebrewRefresh(refresh bool) {
 	e.homebrewRefresh = refresh
 }
 
+// SetFactStore injects a pre-populated fact store. Any key already seeded
+// via fact.Set short-circuits its collector. Tests use this to stub out
+// homebrew/mas/os facts and avoid shelling out to real system tools.
+func (e *Engine) SetFactStore(store *fact.Store) {
+	e.factStore = store
+}
+
 // SetInput configures the reader used for subprocess stdin during Apply.
 func (e *Engine) SetInput(stdin io.Reader) {
 	e.stdin = stdin
@@ -84,7 +92,10 @@ func (e *Engine) SetScriptFile(path string) {
 // script file), collects facts about the current system state, and returns the
 // result of comparing desired vs actual state.
 func (e *Engine) Plan(ctx context.Context) (action.PlanResult, error) {
-	store := fact.NewStore()
+	store := e.factStore
+	if store == nil {
+		store = fact.NewStore()
+	}
 
 	if e.scriptFile != "" {
 		content, err := os.ReadFile(e.scriptFile)
