@@ -161,6 +161,21 @@ func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, de
 
 	batched := make(map[decl.Type][]decl.Declaration)
 	for _, d := range decls {
+		ok, err := e.passesCheck(ctx, store, d)
+		if err != nil {
+			return action.PlanResult{}, err
+		}
+		if !ok {
+			label := d.Path
+			if label == "" {
+				label = d.Type.String()
+			}
+			result.Observations = append(result.Observations, action.Observation{
+				Group:       d.Type.String(),
+				Description: fmt.Sprintf("%s (skipped — check did not pass)", label),
+			})
+			continue
+		}
 		if e.registry.IsBatched(d.Type) {
 			batched[d.Type] = append(batched[d.Type], d)
 			continue
@@ -186,6 +201,28 @@ func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, de
 	}
 
 	return result, nil
+}
+
+// passesCheck evaluates a declaration's optional gate command. A declaration
+// with no Check always passes. Otherwise the command runs (cached by command
+// string, so repeated checks for the same app cost one invocation) and the
+// declaration is gated on a zero exit — the same "exit 0 = present" convention
+// used by c.script()'s check. This lets a script seed config only when the
+// owning app is installed, e.g. check: "test -d /Applications/Cursor.app".
+func (e *Engine) passesCheck(ctx context.Context, store *fact.Store, d decl.Declaration) (bool, error) {
+	if d.Check == "" {
+		return true, nil
+	}
+	info, err := fact.Get(ctx, store, "check:"+d.Check, fact.ScriptCollector{Check: d.Check})
+	if err != nil {
+		return false, err
+	}
+	if !info.Installed {
+		// A non-zero exit and a command that fails to launch (e.g. a typo) are
+		// indistinguishable here — both skip. Log so silent skips are traceable.
+		e.logger.Debug("declaration skipped: check did not pass", "path", d.Path, "check", d.Check)
+	}
+	return info.Installed, nil
 }
 
 // Apply runs Plan and then executes all resulting actions, returning the full

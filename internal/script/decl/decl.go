@@ -54,6 +54,7 @@ func (t Type) String() string {
 type Declaration struct {
 	Type                   Type
 	State                  State
+	Check                  string          // optional gate: shell command; non-zero exit skips this declaration (exit 0 = present)
 	Path                   string          // target path (~ expanded)
 	Content                []byte          // File: inline content
 	SourceFile             string          // File: relative path in source dir

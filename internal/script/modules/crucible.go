@@ -93,6 +93,18 @@ func (m *CrucibleModule) parsePackageState(opts *goja.Object) decl.State {
 	}
 }
 
+// optString returns the string value of opts[key], or "" if unset.
+func optString(opts *goja.Object, key string) string {
+	if opts == nil {
+		return ""
+	}
+	v := opts.Get(key)
+	if v == nil || goja.IsUndefined(v) {
+		return ""
+	}
+	return v.String()
+}
+
 // expandPath resolves ~ to the target directory and cleans the path.
 func (m *CrucibleModule) expandPath(path string) string {
 	if strings.HasPrefix(path, "~/") {
@@ -149,6 +161,7 @@ func (m *CrucibleModule) applyFileOpts(decl *decl.Declaration, opts *goja.Object
 	if v := opts.Get("mode"); v != nil && !goja.IsUndefined(v) {
 		decl.Mode = fs.FileMode(v.ToInteger())
 	}
+	decl.Check = optString(opts, "check")
 }
 
 // dir declares a managed directory.
@@ -206,6 +219,7 @@ func (m *CrucibleModule) symlink(call goja.FunctionCall) goja.Value {
 		Type:       decl.Symlink,
 		Path:       path,
 		LinkTarget: m.expandPath(targetVal.String()),
+		Check:      optString(opts, "check"),
 	})
 
 	return goja.Undefined()

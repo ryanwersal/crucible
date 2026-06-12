@@ -90,6 +90,36 @@ func TestExecute_CreateSymlink(t *testing.T) {
 	}
 }
 
+func TestExecute_CreateSymlink_CreatesParentDirs(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.txt")
+	// Link lives under a tree that does not exist yet, mirroring an app
+	// support directory for an app that has never been launched.
+	link := filepath.Join(dir, "Application Support", "App", "User", "settings.json")
+
+	if err := os.WriteFile(target, []byte("target"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := Execute(context.Background(), Action{
+		Type:       CreateSymlink,
+		Path:       link,
+		LinkTarget: target,
+	}, io.Discard, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := os.Readlink(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != target {
+		t.Fatalf("expected target %q, got %q", target, got)
+	}
+}
+
 func TestExecute_SetPermissions(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

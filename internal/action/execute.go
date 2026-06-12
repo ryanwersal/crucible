@@ -20,6 +20,11 @@ func Execute(ctx context.Context, a Action, stdout, stderr io.Writer) error {
 	case CreateDir:
 		return os.MkdirAll(a.Path, a.Mode)
 	case CreateSymlink:
+		// Mirror executeWriteFile: ensure the parent tree exists so a symlink
+		// into a not-yet-created directory (e.g. an app support dir) succeeds.
+		if err := os.MkdirAll(filepath.Dir(a.Path), 0o755); err != nil {
+			return fmt.Errorf("ensure parent dir: %w", err)
+		}
 		return os.Symlink(a.LinkTarget, a.Path)
 	case SetPermissions:
 		return os.Chmod(a.Path, a.Mode)

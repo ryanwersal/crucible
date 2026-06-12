@@ -105,6 +105,10 @@ Options (mutually exclusive content sources):
 - source: string — relative path to a file in the source directory (copied verbatim)
 - template: string, data: object — relative path to a Go template, rendered with data
 - mode: number — file permissions (default: 0o644)
+- check: string — optional gate; shell command run at plan time. If it exits
+  non-zero the file is skipped (exit 0 = present). Use it to seed config only
+  when the owning app is installed, e.g. check: "test -d /Applications/Cursor.app".
+  Ignored when state is "absent" (removals are never gated).
 
 Examples:
   c.file("~/.gitconfig", { content: "[user]\n  name = Me" })
@@ -127,9 +131,17 @@ Declare a managed symlink.
 
 Options:
 - target: string — the symlink target path (required unless state: "absent")
+- check: string — optional gate; shell command run at plan time. If it exits
+  non-zero the symlink is skipped (exit 0 = present). Use it to seed config only
+  when the owning app is installed, e.g. check: "test -d /Applications/Cursor.app".
+  Ignored when state is "absent" (removals are never gated).
 
 Example:
   c.symlink("~/.vimrc", { target: "~/.config/nvim/init.vim" })
+  c.symlink("~/Library/Application Support/Cursor/User/settings.json", {
+    target: "dotfiles/cursor/settings.json",
+    check: "test -d '/Applications/Cursor.app'",
+  })
 
 If a regular file or directory already occupies the path, crucible plans the
 removal as a destructive operation and apply will refuse to proceed without an

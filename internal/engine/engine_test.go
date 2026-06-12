@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -93,6 +94,73 @@ func TestPlan_Script(t *testing.T) {
 	}
 	if !hasDir {
 		t.Fatal("expected CreateDir action from script")
+	}
+}
+
+// TestPlan_Script_CheckPasses verifies that a declaration whose check command
+// exits 0 is planned normally.
+func TestPlan_Script_CheckPasses(t *testing.T) {
+	t.Parallel()
+	src := t.TempDir()
+	tgt := t.TempDir()
+
+	scriptContent := `
+		var c = require("crucible");
+		c.file("~/.bashrc", { content: "managed", check: "true" });
+	`
+	mustWriteFile(t, filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
+
+	eng := New(src, tgt, slog.New(slog.DiscardHandler))
+	result, err := eng.Plan(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hasWrite := false
+	for _, a := range result.Actions {
+		if a.Type == action.WriteFile {
+			hasWrite = true
+		}
+	}
+	if !hasWrite {
+		t.Fatal("expected WriteFile action when check passes")
+	}
+}
+
+// TestPlan_Script_CheckFailsSkips verifies that a declaration whose check
+// command exits non-zero is skipped: it produces no action and a single
+// observation noting the skip.
+func TestPlan_Script_CheckFailsSkips(t *testing.T) {
+	t.Parallel()
+	src := t.TempDir()
+	tgt := t.TempDir()
+
+	scriptContent := `
+		var c = require("crucible");
+		c.file("~/.bashrc", { content: "managed", check: "false" });
+	`
+	mustWriteFile(t, filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
+
+	eng := New(src, tgt, slog.New(slog.DiscardHandler))
+	result, err := eng.Plan(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, a := range result.Actions {
+		if a.Type == action.WriteFile {
+			t.Fatalf("expected no WriteFile action when check fails, got %+v", a)
+		}
+	}
+
+	skipped := false
+	for _, o := range result.Observations {
+		if strings.Contains(o.Description, "skipped") {
+			skipped = true
+		}
+	}
+	if !skipped {
+		t.Fatalf("expected a skip observation, got %+v", result.Observations)
 	}
 }
 
