@@ -60,9 +60,14 @@ func TestBuildContainsAllTemplateFuncs(t *testing.T) {
 func TestBuildContainsAllJSAPIFunctions(t *testing.T) {
 	reg := resource.DefaultRegistry()
 	output := reference.Build(buildTestRoot(), reg)
+	// Keep in sync with the functions registered on the crucible module in
+	// internal/script/modules/crucible.go (obj.Set("name", ...)). Every JS API
+	// function must be documented in the reference so a script author — human
+	// or coding agent — can discover the full surface from one command.
 	jsFuncs := []string{
 		"file", "dir", "symlink", "brew", "defaults", "dock",
-		"git", "font", "mas", "mise", "shell", "log",
+		"git", "font", "mas", "mise", "ollama", "shell",
+		"keyRemap", "display", "script", "log",
 	}
 	for _, name := range jsFuncs {
 		target := "c." + name + "("
