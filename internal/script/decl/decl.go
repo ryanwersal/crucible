@@ -36,6 +36,7 @@ const (
 	Display
 	Script
 	OllamaModel
+	HFDownload
 )
 
 var typeNames sync.Map
@@ -89,6 +90,11 @@ type Declaration struct {
 	ScriptInstall          string          // Script: shell command to install
 	ScriptCheck            string          // Script: shell command to check if installed (exit 0 = installed)
 	OllamaModel            string          // OllamaModel: model reference, e.g. "llama3.1:8b" or "hf.co/user/repo:Q4_K_M"
+	HFRepo                 string          // HFDownload: HuggingFace repo id, e.g. "user/repo"
+	HFDest                 string          // HFDownload: local directory to download into (~ expanded)
+	HFInclude              []string        // HFDownload: optional --include globs
+	HFExclude              []string        // HFDownload: optional --exclude globs
+	HFRevision             string          // HFDownload: optional git revision/branch/tag
 }
 
 // AllTypes returns every registered declaration Type, sorted by ordinal.

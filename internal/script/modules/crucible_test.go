@@ -315,6 +315,76 @@ func TestOllama_InvalidArgs(t *testing.T) {
 	}
 }
 
+func TestHF_Basic(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.hf("user/repo", { dest: "~/models/repo", include: "*.gguf", revision: "main" })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(*decls) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(*decls))
+	}
+	d := (*decls)[0]
+	if d.Type != decl.HFDownload {
+		t.Errorf("type = %v, want HFDownload", d.Type)
+	}
+	if d.HFRepo != "user/repo" {
+		t.Errorf("repo = %q", d.HFRepo)
+	}
+	if d.HFDest != "/home/user/models/repo" {
+		t.Errorf("dest = %q, want expanded path", d.HFDest)
+	}
+	if len(d.HFInclude) != 1 || d.HFInclude[0] != "*.gguf" {
+		t.Errorf("include = %v", d.HFInclude)
+	}
+	if d.HFRevision != "main" {
+		t.Errorf("revision = %q", d.HFRevision)
+	}
+}
+
+func TestHF_IncludeArray(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.hf("user/repo", { dest: "~/m", include: ["*.safetensors", "*.json"] })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := (*decls)[0].HFInclude; len(got) != 2 || got[0] != "*.safetensors" || got[1] != "*.json" {
+		t.Errorf("include = %v", got)
+	}
+}
+
+func TestHF_Absent(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.hf("user/repo", { dest: "~/m", state: "absent" })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := (*decls)[0]; d.State != decl.Absent {
+		t.Errorf("state = %v, want Absent", d.State)
+	}
+}
+
+func TestHF_InvalidArgs(t *testing.T) {
+	t.Parallel()
+	for _, src := range []string{
+		`c.hf("user/repo")`,                                // no options/dest
+		`c.hf("user/repo", {})`,                            // missing dest
+		`c.hf("user/repo", { dest: "~/m", include: [1] })`, // non-string include element
+	} {
+		vm, _ := setupModule(t)
+		if _, err := vm.RunString(src); err == nil {
+			t.Errorf("expected error for %s", src)
+		}
+	}
+}
+
 func TestDefaults_ThreeArg(t *testing.T) {
 	t.Parallel()
 	vm, decls := setupModule(t)

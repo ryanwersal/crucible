@@ -255,6 +255,27 @@ Examples:
   c.ollama("hf.co/user/repo:Q4_K_M")
   c.ollama("old-model:tag", { state: "absent" })
 
+## c.hf(repo, options)
+
+Download a HuggingFace repo into a local directory via the hf CLI — useful for
+staging model weights into a path an app reads from. The destination is
+considered present (no action) once it contains downloaded content; remove the
+directory to re-fetch. Planning detects presence locally; downloading requires
+the hf CLI on PATH.
+
+Options:
+- dest: string — local directory to download into (required, ~ expanded)
+- include: string | string[] — only download paths matching these globs
+- exclude: string | string[] — skip paths matching these globs
+- revision: string — a specific git revision, branch, or tag
+- state: "absent" — remove the destination directory (a destructive action)
+
+Examples:
+  c.hf("user/repo", { dest: "~/models/repo" })
+  c.hf("user/repo", { dest: "~/models/repo", include: "*.gguf" })
+  c.hf("user/repo", { dest: "~/models/repo", include: ["*.safetensors"], revision: "main" })
+  c.hf("user/repo", { dest: "~/models/repo", state: "absent" })
+
 ## c.shell(path, options?)
 
 Declare the desired login shell for the current user.
@@ -443,6 +464,7 @@ var declTypeDescriptions = map[decl.Type]string{
 	decl.Display:     "Display density — sidebar icon size, menu bar spacing, and resolution scaling",
 	decl.Script:      "Script-installed tool — installed via a shell command, checked by a command's exit code",
 	decl.OllamaModel: "Ollama model — pulled or removed from the local Ollama model store",
+	decl.HFDownload:  "HuggingFace download — repo files fetched into a local directory via the hf CLI",
 }
 
 func writeDeclTypes(b *strings.Builder, reg *resource.Registry) {
@@ -484,6 +506,7 @@ var actionTypeDescriptions = map[action.Type]string{
 	action.RunScript:         "Run a shell command to install a tool",
 	action.PullOllamaModel:   "Pull an Ollama model via ollama pull",
 	action.RemoveOllamaModel: "Remove an Ollama model via ollama rm",
+	action.DownloadHF:        "Download a HuggingFace repo into a local directory via hf download",
 }
 
 func writeActionTypes(b *strings.Builder, reg *resource.Registry) {

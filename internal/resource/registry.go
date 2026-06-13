@@ -156,6 +156,7 @@ func newDefaultRegistry() *Registry {
 	r.RegisterHandler(KeyRemapHandler{})
 	r.RegisterHandler(DisplayHandler{})
 	r.RegisterHandler(ScriptHandler{})
+	r.RegisterHandler(HFDownloadHandler{})
 
 	// Batch handlers
 	r.RegisterBatchHandler(PackageHandler{})
@@ -189,6 +190,7 @@ func newDefaultRegistry() *Registry {
 	r.RegisterExecutor(RunScriptExecutor{})
 	r.RegisterExecutor(PullOllamaModelExecutor{})
 	r.RegisterExecutor(RemoveOllamaModelExecutor{})
+	r.RegisterExecutor(DownloadHFExecutor{})
 
 	return r
 }

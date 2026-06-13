@@ -66,7 +66,7 @@ func TestBuildContainsAllJSAPIFunctions(t *testing.T) {
 	// or coding agent — can discover the full surface from one command.
 	jsFuncs := []string{
 		"file", "dir", "symlink", "brew", "defaults", "dock",
-		"git", "font", "mas", "mise", "ollama", "shell",
+		"git", "font", "mas", "mise", "ollama", "hf", "shell",
 		"keyRemap", "display", "script", "log",
 	}
 	for _, name := range jsFuncs {

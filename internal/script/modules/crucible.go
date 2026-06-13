@@ -47,6 +47,7 @@ func (m *CrucibleModule) Export(facts *FactsModule) *goja.Object {
 	_ = obj.Set("mas", m.mas)
 	_ = obj.Set("mise", m.mise)
 	_ = obj.Set("ollama", m.ollama)
+	_ = obj.Set("hf", m.hf)
 	_ = obj.Set("shell", m.shell)
 	_ = obj.Set("keyRemap", m.keyRemap)
 	_ = obj.Set("display", m.display)
@@ -624,6 +625,68 @@ func (m *CrucibleModule) ollama(call goja.FunctionCall) goja.Value {
 		panic(m.vm.NewGoError(fmt.Errorf("ollama() argument must be a string or array of strings")))
 	}
 
+	return goja.Undefined()
+}
+
+// optStringArray returns opts[key] as a []string, accepting either a single
+// string or an array of strings. Returns nil when the key is unset.
+func optStringArray(vm *goja.Runtime, opts *goja.Object, fn, key string) []string {
+	v := opts.Get(key)
+	if v == nil || goja.IsUndefined(v) {
+		return nil
+	}
+	switch e := v.Export().(type) {
+	case string:
+		return []string{e}
+	case []any:
+		out := make([]string, 0, len(e))
+		for _, item := range e {
+			s, ok := item.(string)
+			if !ok {
+				panic(vm.NewGoError(fmt.Errorf("%s() %s must contain only strings", fn, key)))
+			}
+			out = append(out, s)
+		}
+		return out
+	default:
+		panic(vm.NewGoError(fmt.Errorf("%s() %s must be a string or array of strings", fn, key)))
+	}
+}
+
+// hf declares a HuggingFace repo to download into a local directory via the
+// hf CLI. Useful for staging model weights an app reads from a fixed path.
+// Usage: c.hf("user/repo", { dest: "~/models/repo" })
+//
+//	c.hf("user/repo", { dest: "~/models/repo", include: "*.gguf" })
+//	c.hf("user/repo", { dest: "~/models/repo", include: ["*.safetensors"], revision: "main" })
+//	c.hf("user/repo", { dest: "~/models/repo", state: "absent" })
+func (m *CrucibleModule) hf(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 2 {
+		panic(m.vm.NewGoError(fmt.Errorf("hf() requires a repo argument and options with a dest")))
+	}
+
+	repo := call.Arguments[0].String()
+	opts := call.Arguments[1].ToObject(m.vm)
+
+	destVal := opts.Get("dest")
+	if destVal == nil || goja.IsUndefined(destVal) {
+		panic(m.vm.NewGoError(fmt.Errorf("hf() requires a dest option")))
+	}
+
+	d := decl.Declaration{
+		Type:   decl.HFDownload,
+		HFRepo: repo,
+		HFDest: m.expandPath(destVal.String()),
+	}
+	if m.isAbsent(opts) {
+		d.State = decl.Absent
+	} else {
+		d.HFInclude = optStringArray(m.vm, opts, "hf", "include")
+		d.HFExclude = optStringArray(m.vm, opts, "hf", "exclude")
+		d.HFRevision = optString(opts, "revision")
+	}
+
+	*m.declarations = append(*m.declarations, d)
 	return goja.Undefined()
 }
 

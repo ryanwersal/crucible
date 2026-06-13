@@ -300,6 +300,28 @@ func (RemoveOllamaModelExecutor) Execute(ctx context.Context, a action.Action, s
 	return runCmd(ctx, a, stdin, stdout, stderr, "ollama", "rm", a.OllamaModel)
 }
 
+// DownloadHFExecutor downloads a HuggingFace repo into a local directory via
+// `hf download`. hf is idempotent — already-present files are verified and
+// skipped — so a resumed or partial download completes on the next run.
+type DownloadHFExecutor struct{}
+
+func (DownloadHFExecutor) ActionType() action.Type { return action.DownloadHF }
+func (DownloadHFExecutor) ActionName() string      { return "DownloadHF" }
+
+func (DownloadHFExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
+	args := []string{"download", a.HFRepo, "--local-dir", a.HFDest}
+	for _, g := range a.HFInclude {
+		args = append(args, "--include", g)
+	}
+	for _, g := range a.HFExclude {
+		args = append(args, "--exclude", g)
+	}
+	if a.HFRevision != "" {
+		args = append(args, "--revision", a.HFRevision)
+	}
+	return runCmd(ctx, a, stdin, stdout, stderr, "hf", args...)
+}
+
 // SetShellExecutor changes the user's login shell.
 type SetShellExecutor struct{}
 

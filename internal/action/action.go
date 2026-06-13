@@ -36,6 +36,7 @@ const (
 	UpgradePackage
 	PullOllamaModel
 	RemoveOllamaModel
+	DownloadHF
 )
 
 var typeNames sync.Map
@@ -88,6 +89,11 @@ type Action struct {
 	ScriptName              string          // RunScript: tool name
 	ScriptInstall           string          // RunScript: shell command to run
 	OllamaModel             string          // PullOllamaModel, RemoveOllamaModel: model reference
+	HFRepo                  string          // DownloadHF: HuggingFace repo id
+	HFDest                  string          // DownloadHF: local download directory
+	HFInclude               []string        // DownloadHF: --include globs
+	HFExclude               []string        // DownloadHF: --exclude globs
+	HFRevision              string          // DownloadHF: git revision/branch/tag
 	NeedsSudo               bool            // action requires privilege escalation
 	SerialGroup             string          // actions sharing a non-empty SerialGroup run in plan order, never concurrently — for tools that take exclusive global locks (e.g. Homebrew's per-Cellar locks)
 
