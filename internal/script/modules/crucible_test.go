@@ -236,6 +236,85 @@ func TestBrew_InvalidArg(t *testing.T) {
 	}
 }
 
+func TestOllama_SingleString(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.ollama("hf.co/user/repo:Q4_K_M")`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(*decls) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(*decls))
+	}
+	d := (*decls)[0]
+	if d.Type != decl.OllamaModel {
+		t.Errorf("type = %v, want OllamaModel", d.Type)
+	}
+	if d.OllamaModel != "hf.co/user/repo:Q4_K_M" {
+		t.Errorf("model = %q, want the original reference unchanged", d.OllamaModel)
+	}
+	if d.State != decl.Present {
+		t.Errorf("state = %v, want Present", d.State)
+	}
+}
+
+func TestOllama_Array(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.ollama(["llama3.1:8b", "qwen2.5-coder:7b"])`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"llama3.1:8b", "qwen2.5-coder:7b"}
+	if len(*decls) != len(want) {
+		t.Fatalf("expected %d declarations, got %d", len(want), len(*decls))
+	}
+	for i, name := range want {
+		d := (*decls)[i]
+		if d.Type != decl.OllamaModel {
+			t.Errorf("[%d] type = %v, want OllamaModel", i, d.Type)
+		}
+		if d.OllamaModel != name {
+			t.Errorf("[%d] model = %q, want %q", i, d.OllamaModel, name)
+		}
+	}
+}
+
+func TestOllama_Absent(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.ollama("old-model:1b", { state: "absent" })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(*decls) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(*decls))
+	}
+	if d := (*decls)[0]; d.State != decl.Absent {
+		t.Errorf("state = %v, want Absent", d.State)
+	}
+}
+
+func TestOllama_InvalidArgs(t *testing.T) {
+	t.Parallel()
+	for _, src := range []string{
+		`c.ollama()`,          // no arguments
+		`c.ollama(42)`,        // non-string, non-array
+		`c.ollama(["ok", 7])`, // non-string array element
+	} {
+		vm, _ := setupModule(t)
+		if _, err := vm.RunString(src); err == nil {
+			t.Errorf("expected error for %s", src)
+		}
+	}
+}
+
 func TestDefaults_ThreeArg(t *testing.T) {
 	t.Parallel()
 	vm, decls := setupModule(t)

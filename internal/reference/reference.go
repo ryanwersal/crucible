@@ -240,6 +240,21 @@ Examples:
   c.mise("node", "22")
   c.mise("python", { state: "absent" })
 
+## c.ollama(model) / c.ollama(array) / c.ollama(model, options)
+
+Declare locally managed Ollama models. Present models are pulled; absent ones
+are removed. A model reference may be a registry model, a user-namespaced
+model, or any GGUF on HuggingFace (hf.co/<user>/<repo>:<quant>). A reference
+without a tag defaults to ":latest". Installed models are detected from
+Ollama's on-disk store, so planning does not require the Ollama server; pulling
+and removing do (run the Ollama app or "ollama serve").
+
+Examples:
+  c.ollama("llama3.1:8b")
+  c.ollama(["qwen2.5-coder:7b", "llama3.1:8b"])
+  c.ollama("hf.co/user/repo:Q4_K_M")
+  c.ollama("old-model:tag", { state: "absent" })
+
 ## c.shell(path, options?)
 
 Declare the desired login shell for the current user.
@@ -413,20 +428,21 @@ func writeTemplateData(b *strings.Builder) {
 }
 
 var declTypeDescriptions = map[decl.Type]string{
-	decl.File:     "Managed file — created or updated with specified content, source, or template",
-	decl.Dir:      "Managed directory — created with specified permissions",
-	decl.Symlink:  "Managed symlink — points to a target path",
-	decl.Package:  "Homebrew package — installed or uninstalled via brew",
-	decl.Defaults: "macOS defaults key — set or deleted in a preference domain",
-	decl.Dock:     "macOS Dock layout — apps and folders in the Dock",
-	decl.GitRepo:  "Git repository — cloned or updated at a path",
-	decl.Font:     "Font file — installed to the fonts directory",
-	decl.MiseTool: "Mise tool — globally installed version manager tool",
-	decl.Shell:    "Login shell — sets the user's default shell",
-	decl.MasApp:   "Mac App Store app — installed via mas",
-	decl.KeyRemap: "Keyboard modifier remap — applied globally via hidutil with LaunchAgent persistence",
-	decl.Display:  "Display density — sidebar icon size, menu bar spacing, and resolution scaling",
-	decl.Script:   "Script-installed tool — installed via a shell command, checked by a command's exit code",
+	decl.File:        "Managed file — created or updated with specified content, source, or template",
+	decl.Dir:         "Managed directory — created with specified permissions",
+	decl.Symlink:     "Managed symlink — points to a target path",
+	decl.Package:     "Homebrew package — installed or uninstalled via brew",
+	decl.Defaults:    "macOS defaults key — set or deleted in a preference domain",
+	decl.Dock:        "macOS Dock layout — apps and folders in the Dock",
+	decl.GitRepo:     "Git repository — cloned or updated at a path",
+	decl.Font:        "Font file — installed to the fonts directory",
+	decl.MiseTool:    "Mise tool — globally installed version manager tool",
+	decl.Shell:       "Login shell — sets the user's default shell",
+	decl.MasApp:      "Mac App Store app — installed via mas",
+	decl.KeyRemap:    "Keyboard modifier remap — applied globally via hidutil with LaunchAgent persistence",
+	decl.Display:     "Display density — sidebar icon size, menu bar spacing, and resolution scaling",
+	decl.Script:      "Script-installed tool — installed via a shell command, checked by a command's exit code",
+	decl.OllamaModel: "Ollama model — pulled or removed from the local Ollama model store",
 }
 
 func writeDeclTypes(b *strings.Builder, reg *resource.Registry) {
@@ -466,6 +482,8 @@ var actionTypeDescriptions = map[action.Type]string{
 	action.RemoveKeyRemap:    "Clear keyboard modifier remappings and remove LaunchAgent",
 	action.SetDisplay:        "Apply display density settings via defaults and CoreGraphics",
 	action.RunScript:         "Run a shell command to install a tool",
+	action.PullOllamaModel:   "Pull an Ollama model via ollama pull",
+	action.RemoveOllamaModel: "Remove an Ollama model via ollama rm",
 }
 
 func writeActionTypes(b *strings.Builder, reg *resource.Registry) {

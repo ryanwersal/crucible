@@ -278,6 +278,28 @@ func (UninstallMiseToolExecutor) Execute(ctx context.Context, a action.Action, s
 	return runCmd(ctx, a, stdin, stdout, stderr, "mise", "uninstall", a.MiseToolName)
 }
 
+// PullOllamaModelExecutor pulls a model via `ollama pull`. This requires the
+// Ollama server to be running (the macOS app, or `ollama serve`); if it isn't,
+// ollama prints a clear "could not connect" error which surfaces to the user.
+type PullOllamaModelExecutor struct{}
+
+func (PullOllamaModelExecutor) ActionType() action.Type { return action.PullOllamaModel }
+func (PullOllamaModelExecutor) ActionName() string      { return "PullOllamaModel" }
+
+func (PullOllamaModelExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
+	return runCmd(ctx, a, stdin, stdout, stderr, "ollama", "pull", a.OllamaModel)
+}
+
+// RemoveOllamaModelExecutor removes a locally installed model via `ollama rm`.
+type RemoveOllamaModelExecutor struct{}
+
+func (RemoveOllamaModelExecutor) ActionType() action.Type { return action.RemoveOllamaModel }
+func (RemoveOllamaModelExecutor) ActionName() string      { return "RemoveOllamaModel" }
+
+func (RemoveOllamaModelExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
+	return runCmd(ctx, a, stdin, stdout, stderr, "ollama", "rm", a.OllamaModel)
+}
+
 // SetShellExecutor changes the user's login shell.
 type SetShellExecutor struct{}
 

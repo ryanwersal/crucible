@@ -162,6 +162,7 @@ func newDefaultRegistry() *Registry {
 	r.RegisterBatchHandler(FontHandler{})
 	r.RegisterBatchHandler(MiseToolHandler{Resolver: fact.MiseResolver{}})
 	r.RegisterBatchHandler(MasHandler{})
+	r.RegisterBatchHandler(OllamaModelHandler{})
 
 	// Action executors
 	r.RegisterExecutor(WriteFileExecutor{})
@@ -186,6 +187,8 @@ func newDefaultRegistry() *Registry {
 	r.RegisterExecutor(RemoveKeyRemapExecutor{})
 	r.RegisterExecutor(SetDisplayExecutor{})
 	r.RegisterExecutor(RunScriptExecutor{})
+	r.RegisterExecutor(PullOllamaModelExecutor{})
+	r.RegisterExecutor(RemoveOllamaModelExecutor{})
 
 	return r
 }

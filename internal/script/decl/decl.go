@@ -35,6 +35,7 @@ const (
 	KeyRemap
 	Display
 	Script
+	OllamaModel
 )
 
 var typeNames sync.Map
@@ -87,6 +88,7 @@ type Declaration struct {
 	ScriptName             string          // Script: human-readable tool name
 	ScriptInstall          string          // Script: shell command to install
 	ScriptCheck            string          // Script: shell command to check if installed (exit 0 = installed)
+	OllamaModel            string          // OllamaModel: model reference, e.g. "llama3.1:8b" or "hf.co/user/repo:Q4_K_M"
 }
 
 // AllTypes returns every registered declaration Type, sorted by ordinal.

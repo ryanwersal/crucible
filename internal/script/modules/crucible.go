@@ -46,6 +46,7 @@ func (m *CrucibleModule) Export(facts *FactsModule) *goja.Object {
 	_ = obj.Set("font", m.font)
 	_ = obj.Set("mas", m.mas)
 	_ = obj.Set("mise", m.mise)
+	_ = obj.Set("ollama", m.ollama)
 	_ = obj.Set("shell", m.shell)
 	_ = obj.Set("keyRemap", m.keyRemap)
 	_ = obj.Set("display", m.display)
@@ -578,6 +579,52 @@ func (m *CrucibleModule) mise(call goja.FunctionCall) goja.Value {
 	}
 
 	panic(m.vm.NewGoError(fmt.Errorf("mise() second argument must be a version string or { state: \"absent\" }")))
+}
+
+// ollama declares one or more locally managed Ollama models.
+// Usage: c.ollama("llama3.1:8b")
+//
+//	c.ollama(["qwen2.5-coder:7b", "llama3.1:8b"])
+//	c.ollama("hf.co/user/repo:Q4_K_M")   // any GGUF on HuggingFace
+//	c.ollama("old-model:tag", { state: "absent" })
+func (m *CrucibleModule) ollama(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		panic(m.vm.NewGoError(fmt.Errorf("ollama() requires a model reference argument")))
+	}
+
+	var state decl.State
+	if len(call.Arguments) >= 2 {
+		opts := call.Arguments[1].ToObject(m.vm)
+		if m.isAbsent(opts) {
+			state = decl.Absent
+		}
+	}
+
+	add := func(ref string) {
+		*m.declarations = append(*m.declarations, decl.Declaration{
+			Type:        decl.OllamaModel,
+			OllamaModel: ref,
+			State:       state,
+		})
+	}
+
+	exported := call.Arguments[0].Export()
+	switch v := exported.(type) {
+	case string:
+		add(v)
+	case []any:
+		for _, item := range v {
+			s, ok := item.(string)
+			if !ok {
+				panic(m.vm.NewGoError(fmt.Errorf("ollama() array elements must be strings")))
+			}
+			add(s)
+		}
+	default:
+		panic(m.vm.NewGoError(fmt.Errorf("ollama() argument must be a string or array of strings")))
+	}
+
+	return goja.Undefined()
 }
 
 // shell declares the desired login shell for the current user.
