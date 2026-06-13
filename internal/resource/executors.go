@@ -87,6 +87,12 @@ func (CreateSymlinkExecutor) ActionType() action.Type { return action.CreateSyml
 func (CreateSymlinkExecutor) ActionName() string      { return "CreateSymlink" }
 
 func (CreateSymlinkExecutor) Execute(_ context.Context, a action.Action, _ io.Reader, _, _ io.Writer) error {
+	// Ensure the parent tree exists (mirroring WriteFileExecutor) so a symlink
+	// into a not-yet-created directory — e.g. an app support dir for an app that
+	// has never launched — succeeds instead of failing with ENOENT.
+	if err := os.MkdirAll(filepath.Dir(a.Path), 0o755); err != nil {
+		return fmt.Errorf("ensure parent dir: %w", err)
+	}
 	return os.Symlink(a.LinkTarget, a.Path)
 }
 

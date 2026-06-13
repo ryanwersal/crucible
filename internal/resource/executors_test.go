@@ -1,4 +1,4 @@
-package action
+package resource
 
 import (
 	"context"
@@ -8,19 +8,23 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/ryanwersal/crucible/internal/action"
 )
 
-func TestExecute_WriteFile(t *testing.T) {
+// These exercise the live action executors registered in the default registry
+// (the path Apply actually runs), not the inert action descriptions.
+
+func TestWriteFileExecutor(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.txt")
 
-	err := Execute(context.Background(), Action{
-		Type:    WriteFile,
+	err := WriteFileExecutor{}.Execute(context.Background(), action.Action{
 		Path:    path,
 		Content: []byte("hello world"),
 		Mode:    0o644,
-	}, io.Discard, io.Discard)
+	}, nil, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,95 +36,74 @@ func TestExecute_WriteFile(t *testing.T) {
 	if string(content) != "hello world" {
 		t.Fatalf("expected 'hello world', got %q", content)
 	}
-
-	info, _ := os.Stat(path)
-	if info.Mode().Perm() != 0o644 {
+	if info, _ := os.Stat(path); info.Mode().Perm() != 0o644 {
 		t.Fatalf("expected mode 0644, got %04o", info.Mode().Perm())
 	}
 }
 
-func TestExecute_CreateDir(t *testing.T) {
+func TestCreateDirExecutor(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sub", "dir")
 
-	err := Execute(context.Background(), Action{
-		Type: CreateDir,
+	err := CreateDirExecutor{}.Execute(context.Background(), action.Action{
 		Path: path,
 		Mode: 0o755,
-	}, io.Discard, io.Discard)
+	}, nil, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !info.IsDir() {
-		t.Fatal("expected directory")
+	if info, err := os.Stat(path); err != nil || !info.IsDir() {
+		t.Fatalf("expected directory at %s (err=%v)", path, err)
 	}
 }
 
-func TestExecute_CreateSymlink(t *testing.T) {
+func TestCreateSymlinkExecutor(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	target := filepath.Join(dir, "target.txt")
 	link := filepath.Join(dir, "link.txt")
-
 	if err := os.WriteFile(target, []byte("target"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	err := Execute(context.Background(), Action{
-		Type:       CreateSymlink,
+	err := CreateSymlinkExecutor{}.Execute(context.Background(), action.Action{
 		Path:       link,
 		LinkTarget: target,
-	}, io.Discard, io.Discard)
+	}, nil, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	got, err := os.Readlink(link)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != target {
-		t.Fatalf("expected target %q, got %q", target, got)
+	if got, err := os.Readlink(link); err != nil || got != target {
+		t.Fatalf("expected link → %q, got %q (err=%v)", target, got, err)
 	}
 }
 
-func TestExecute_CreateSymlink_CreatesParentDirs(t *testing.T) {
+// TestCreateSymlinkExecutor_CreatesParentDirs guards the fix that lets a symlink
+// be created under a tree that does not exist yet — e.g. an app support
+// directory for an app that has never been launched.
+func TestCreateSymlinkExecutor_CreatesParentDirs(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	target := filepath.Join(dir, "target.txt")
-	// Link lives under a tree that does not exist yet, mirroring an app
-	// support directory for an app that has never been launched.
 	link := filepath.Join(dir, "Application Support", "App", "User", "settings.json")
-
 	if err := os.WriteFile(target, []byte("target"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	err := Execute(context.Background(), Action{
-		Type:       CreateSymlink,
+	err := CreateSymlinkExecutor{}.Execute(context.Background(), action.Action{
 		Path:       link,
 		LinkTarget: target,
-	}, io.Discard, io.Discard)
+	}, nil, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	got, err := os.Readlink(link)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != target {
-		t.Fatalf("expected target %q, got %q", target, got)
+	if got, err := os.Readlink(link); err != nil || got != target {
+		t.Fatalf("expected link → %q, got %q (err=%v)", target, got, err)
 	}
 }
 
-func TestExecute_SetPermissions(t *testing.T) {
+func TestSetPermissionsExecutor(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.txt")
@@ -128,22 +111,19 @@ func TestExecute_SetPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := Execute(context.Background(), Action{
-		Type: SetPermissions,
+	err := SetPermissionsExecutor{}.Execute(context.Background(), action.Action{
 		Path: path,
 		Mode: 0o755,
-	}, io.Discard, io.Discard)
+	}, nil, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	info, _ := os.Stat(path)
-	if info.Mode().Perm() != 0o755 {
+	if info, _ := os.Stat(path); info.Mode().Perm() != 0o755 {
 		t.Fatalf("expected 0755, got %04o", info.Mode().Perm())
 	}
 }
 
-func TestExecute_DeletePath(t *testing.T) {
+func TestDeletePathExecutor(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.txt")
@@ -151,20 +131,18 @@ func TestExecute_DeletePath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := Execute(context.Background(), Action{
-		Type: DeletePath,
+	err := DeletePathExecutor{}.Execute(context.Background(), action.Action{
 		Path: path,
-	}, io.Discard, io.Discard)
+	}, nil, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatal("expected file to be deleted")
 	}
 }
 
-func TestExecute_DeletePathRecursive(t *testing.T) {
+func TestDeletePathExecutor_Recursive(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mydir")
@@ -175,15 +153,13 @@ func TestExecute_DeletePathRecursive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := Execute(context.Background(), Action{
-		Type:      DeletePath,
+	err := DeletePathExecutor{}.Execute(context.Background(), action.Action{
 		Path:      path,
 		Recursive: true,
-	}, io.Discard, io.Discard)
+	}, nil, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatal("expected directory to be deleted")
 	}
