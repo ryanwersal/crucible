@@ -38,6 +38,9 @@ func TestDiffHF(t *testing.T) {
 		if a.SerialGroup != "hf" {
 			t.Errorf("SerialGroup = %q, want hf", a.SerialGroup)
 		}
+		if !a.PTY {
+			t.Error("expected PTY=true so download progress streams in interactive mode")
+		}
 		if a.Note == "" {
 			t.Error("expected an auth note when unauthenticated")
 		}

@@ -69,6 +69,9 @@ func TestDiffOllama(t *testing.T) {
 				if got[0].SerialGroup != "ollama" {
 					t.Errorf("expected SerialGroup \"ollama\", got %q", got[0].SerialGroup)
 				}
+				if tt.wantType == PullOllamaModel && !got[0].PTY {
+					t.Error("expected PTY=true on pull so progress streams in interactive mode")
+				}
 				if got[0].OllamaModel != tt.desired[0].Ref {
 					t.Errorf("expected original ref %q passed to action, got %q", tt.desired[0].Ref, got[0].OllamaModel)
 				}

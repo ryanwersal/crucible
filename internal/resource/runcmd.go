@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/creack/pty"
+
 	"github.com/ryanwersal/crucible/internal/action"
 )
 
@@ -61,6 +63,19 @@ func (e *CommandError) Unwrap() error { return e.Err }
 // the captured output tail. Context cancellation is surfaced as the raw exec
 // error so callers can detect it via errors.Is(err, context.Canceled).
 func runCmd(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	// Actions that opt into a PTY (large downloads) get a pseudo-terminal so the
+	// underlying tool emits its rich live progress. The engine only leaves PTY
+	// set in interactive mode; in CI/piped/log mode it clears the flag so the
+	// \r progress frames don't spam the output. The interactivity decision lives
+	// in the CLI layer (single source of truth) — never re-probed here.
+	//
+	// Only stdout is forwarded: a PTY merges stdout and stderr into one stream,
+	// so the single writer captures both (every PTY caller passes the same
+	// writer for both anyway).
+	if a.PTY {
+		return runCmdPTY(ctx, a, stdout, name, args...)
+	}
+
 	capture := newRingBuffer(maxCapturedOutputBytes)
 
 	// exec.Cmd spawns a separate copy goroutine for each non-*os.File writer it
@@ -93,6 +108,41 @@ func runCmd(ctx context.Context, a action.Action, stdin io.Reader, stdout, stder
 		Err:     err,
 		Output:  capture.String(),
 	}
+}
+
+// runCmdPTY runs a subprocess attached to a pseudo-terminal so tools that gate
+// rich progress output on isatty (hf, ollama, …) emit it live. The PTY merges
+// stdout and stderr into one stream, which is fed to the caller's writer (the
+// observer) and a bounded capture buffer for error messages — mirroring runCmd's
+// CommandError contract.
+func runCmdPTY(ctx context.Context, a action.Action, out io.Writer, name string, args ...string) error {
+	capture := newRingBuffer(maxCapturedOutputBytes)
+
+	// Leave Stdin/Stdout/Stderr unset so pty.Start wires them to the tty.
+	cmd := buildCmd(ctx, a, nil, nil, nil, name, args...)
+
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		return &CommandError{Command: name, Args: args, Err: err}
+	}
+	defer func() { _ = ptmx.Close() }()
+
+	// Give the PTY a sane size so progress bars render at a usable width;
+	// the renderer truncates to the real terminal width for display.
+	_ = pty.Setsize(ptmx, &pty.Winsize{Rows: 40, Cols: 120})
+
+	// Drain the master until the child closes the slave (process exit). The
+	// read error at close (EIO on Linux, EOF on macOS) is expected and ignored.
+	_, _ = io.Copy(teeOptional(out, capture), ptmx)
+
+	err = cmd.Wait()
+	if err == nil {
+		return nil
+	}
+	if ctx.Err() != nil {
+		return err
+	}
+	return &CommandError{Command: name, Args: args, Err: err, Output: capture.String()}
 }
 
 // lockedWriter serialises Write calls to an underlying writer. Used when the

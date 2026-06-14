@@ -19,6 +19,7 @@ type ActionObserver interface {
 type ApplyOptions struct {
 	Concurrency int            // max parallel actions; 0 or 1 means sequential
 	Observer    ActionObserver // receives lifecycle events; nil disables callbacks
+	Interactive bool           // crucible is attached to a live terminal; enables PTY-backed progress for actions that opt in
 }
 
 // ActionResult records the outcome of a single action.

@@ -116,13 +116,17 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 				}
 			}
 
-			// Build observer based on whether stdout is a terminal.
+			// Build observer based on whether stdout is a terminal. The same
+			// terminal check is the single source of truth for interactivity,
+			// which gates PTY-backed live progress in the engine.
 			var observer engine.ActionObserver
+			interactive := false
 			if f, ok := w.(*os.File); ok && ui.IsTerminal(f) {
 				r := ui.NewRenderer(f, len(result.Actions), 5)
 				r.Start(cmd.Context())
 				defer r.Wait() // ensure render loop stops and cursor is restored
 				observer = r
+				interactive = true
 			} else {
 				observer = ui.NewLogObserver(logger)
 			}
@@ -130,6 +134,7 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 			applyResult, err := eng.ApplyResultWithOptions(cmd.Context(), result, engine.ApplyOptions{
 				Concurrency: concurrency,
 				Observer:    observer,
+				Interactive: interactive,
 			})
 			if err != nil {
 				return err

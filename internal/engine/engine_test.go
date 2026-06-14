@@ -778,3 +778,48 @@ func TestPlan_ExplicitScriptFile(t *testing.T) {
 		t.Fatal("expected actions from explicit script file")
 	}
 }
+
+func TestStripANSI(t *testing.T) {
+	t.Parallel()
+	cases := map[string]string{
+		"plain text":                    "plain text",
+		"\x1b[32mgreen\x1b[0m":          "green",
+		"download \x1b[1;34m50%\x1b[0m": "download 50%",
+		"\x1b[2K\rprogress: 10/20":      "\rprogress: 10/20", // CSI stripped, \r preserved
+		"no escapes here":               "no escapes here",
+	}
+	for in, want := range cases {
+		if got := stripANSI(in); got != want {
+			t.Errorf("stripANSI(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestApplyResultWithOptions_PTYClearedWhenNotInteractive verifies the engine is
+// the single gate for PTY usage: a PTY-opted action runs piped (child sees no
+// TTY) when not interactive, keeping CI/log output free of progress spam.
+func TestApplyResultWithOptions_PTYClearedWhenNotInteractive(t *testing.T) {
+	t.Parallel()
+	eng := New(t.TempDir(), t.TempDir(), slog.New(slog.DiscardHandler))
+	obs := &testObserver{}
+	result := action.PlanResult{Actions: []action.Action{{
+		Type:          action.RunScript,
+		PTY:           true,
+		ScriptInstall: "test -t 1 && echo TTY || echo NOTTY",
+		Description:   "tty check",
+	}}}
+
+	_, err := eng.ApplyResultWithOptions(context.Background(), result,
+		ApplyOptions{Concurrency: 1, Observer: obs, Interactive: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got string
+	for _, o := range obs.outputs {
+		got += o.line
+	}
+	if !strings.Contains(got, "NOTTY") || strings.Contains(got, "\rTTY") {
+		t.Fatalf("expected child to see no TTY (PTY cleared when not interactive), got %q", got)
+	}
+}

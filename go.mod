@@ -3,6 +3,7 @@ module github.com/ryanwersal/crucible
 go 1.26.1
 
 require (
+	github.com/creack/pty v1.1.24
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
 	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
 	github.com/spf13/cobra v1.10.2

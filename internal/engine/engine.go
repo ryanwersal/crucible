@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"strings"
 
 	"golang.org/x/sync/errgroup"
 
@@ -256,6 +258,16 @@ func (e *Engine) ApplyResultWithOptions(ctx context.Context, result action.PlanR
 		opts.Concurrency = 1
 	}
 
+	// PTY-backed live progress is only meaningful when attached to a terminal;
+	// outside interactive mode (CI, piped, log observer) clear the flag so the
+	// executor uses clean piped output instead of \r progress frames. This is
+	// the single place that decides PTY usage, fed by the CLI's terminal check.
+	if !opts.Interactive {
+		for i := range result.Actions {
+			result.Actions[i].PTY = false
+		}
+	}
+
 	// Pre-acquire sudo credentials if any action needs privilege escalation.
 	if needsSudo(result.Actions) {
 		e.logger.Info("pre-acquiring sudo credentials")
@@ -399,6 +411,20 @@ func chainKey(a action.Action) string {
 	return ""
 }
 
+// ansiEscape matches ANSI escape sequences: CSI sequences (e.g. SGR colors
+// "\x1b[32m" and cursor control "\x1b[2K"), OSC sequences, and lone two-byte
+// escapes. Used to sanitize subprocess output — especially PTY-sourced progress
+// — before it reaches the renderer.
+var ansiEscape = regexp.MustCompile("\x1b\\[[0-?]*[ -/]*[@-~]|\x1b\\][^\a\x1b]*(?:\a|\x1b\\\\)|\x1b[@-Z\\\\-_]")
+
+// stripANSI removes ANSI escape sequences from s.
+func stripANSI(s string) string {
+	if !strings.ContainsRune(s, '\x1b') {
+		return s
+	}
+	return ansiEscape.ReplaceAllString(s, "")
+}
+
 // observerWriter is an io.Writer that splits output into lines and feeds
 // them to an ActionObserver. It treats both \n and \r as line terminators
 // (the latter for progress bars that use carriage return).
@@ -433,6 +459,10 @@ func (w *observerWriter) Write(p []byte) (int, error) {
 			skip++
 		}
 		w.partial = w.partial[skip:]
+		// Strip ANSI escapes (color/cursor control) so PTY-sourced progress
+		// output can't leak unterminated sequences into the renderer when a
+		// line is truncated for width.
+		line = stripANSI(line)
 		if len(line) > 0 {
 			w.observer.ActionOutput(w.index, line)
 		}

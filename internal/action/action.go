@@ -96,6 +96,7 @@ type Action struct {
 	HFExclude               []string        // DownloadHF: --exclude globs
 	HFRevision              string          // DownloadHF: git revision/branch/tag
 	NeedsSudo               bool            // action requires privilege escalation
+	PTY                     bool            // run the subprocess under a pseudo-terminal so it emits TTY-style live progress (used for large downloads); honored only in interactive mode
 	SerialGroup             string          // actions sharing a non-empty SerialGroup run in plan order, never concurrently — for tools that take exclusive global locks (e.g. Homebrew's per-Cellar locks)
 
 	// Destructive flags an action that would irrevocably destroy user content

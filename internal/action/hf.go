@@ -49,6 +49,7 @@ func DiffHF(d DesiredHFDownload, actual *fact.HFInfo) []Action {
 		HFExclude:   d.Exclude,
 		HFRevision:  d.Revision,
 		SerialGroup: "hf",
+		PTY:         true, // surface hf's live download progress in interactive mode
 		Description: fmt.Sprintf("hf download %s → %s", d.Repo, d.Dest),
 	}
 	if !actual.Authenticated {

@@ -173,3 +173,57 @@ func TestCommandError_OutputTailCarrier(t *testing.T) {
 		t.Fatalf("OutputTail = %q", c.OutputTail())
 	}
 }
+
+func TestRunCmdPTY_AllocatesTTY(t *testing.T) {
+	t.Parallel()
+	var out bytes.Buffer
+	// `test -t 1` succeeds only when stdout is a terminal, which the PTY provides.
+	err := runCmdPTY(context.Background(), action.Action{PTY: true}, &out,
+		"sh", "-c", "test -t 1 && echo TTY || echo NOTTY")
+	if err != nil {
+		// A sandbox without /dev/ptmx can't allocate a PTY; skip rather than fail.
+		if cmdErr, ok := errors.AsType[*CommandError](err); ok && cmdErr.Output == "" {
+			t.Skipf("PTY unavailable in this environment: %v", err)
+		}
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out.String(), "TTY") || strings.Contains(out.String(), "NOTTY") {
+		t.Fatalf("expected child to see a TTY, got %q", out.String())
+	}
+}
+
+func TestRunCmd_PipedIsNotTTY(t *testing.T) {
+	t.Parallel()
+	var out bytes.Buffer
+	// Without PTY, the child's stdout is a pipe, so `test -t 1` fails.
+	err := runCmd(context.Background(), action.Action{}, nil, &out, &out,
+		"sh", "-c", "test -t 1 && echo TTY || echo NOTTY")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out.String(), "NOTTY") {
+		t.Fatalf("expected NOTTY for piped stdout, got %q", out.String())
+	}
+}
+
+func TestRunCmdPTY_FailureCapturesOutput(t *testing.T) {
+	t.Parallel()
+	var out bytes.Buffer
+	err := runCmdPTY(context.Background(), action.Action{PTY: true}, &out,
+		"sh", "-c", "echo boom; exit 3")
+	if err == nil {
+		t.Fatal("expected an error from a command that exits non-zero")
+	}
+	cmdErr, ok := errors.AsType[*CommandError](err)
+	if !ok {
+		t.Fatalf("expected *CommandError, got %T: %v", err, err)
+	}
+	// An empty capture means pty.Start failed and the command never ran
+	// (no /dev/ptmx here) — skip rather than assert on output.
+	if cmdErr.Output == "" {
+		t.Skipf("PTY unavailable in this environment: %v", err)
+	}
+	if !strings.Contains(cmdErr.Output, "boom") {
+		t.Errorf("captured output = %q, want it to contain boom", cmdErr.Output)
+	}
+}

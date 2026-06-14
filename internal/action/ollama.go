@@ -42,6 +42,7 @@ func DiffOllama(desired []DesiredOllamaModel, actual *fact.OllamaInfo) []Action 
 				Type:        PullOllamaModel,
 				OllamaModel: d.Ref,
 				SerialGroup: "ollama",
+				PTY:         true, // surface ollama's live pull progress in interactive mode
 				Description: fmt.Sprintf("ollama pull %s", d.Ref),
 			})
 		}
