@@ -58,6 +58,7 @@ type Action struct {
 	Group                   string // resource group for display; set by engine from decl type (e.g. "File", "Package")
 	Path                    string
 	Description             string
+	Note                    string          // optional advisory rendered as an indented line under the action in plan output
 	Recursive               bool            // DeletePath: use os.RemoveAll instead of os.Remove
 	Content                 []byte          // WriteFile
 	Mode                    fs.FileMode     // WriteFile, CreateDir, SetPermissions

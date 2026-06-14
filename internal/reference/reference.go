@@ -263,6 +263,12 @@ considered present (no action) once it contains downloaded content; remove the
 directory to re-fetch. Planning detects presence locally; downloading requires
 the hf CLI on PATH.
 
+Authentication is ambient, never declared: a token is a secret and must not go
+in your script. crucible inherits the environment, so hf resolves auth the way
+it normally does — the HF_TOKEN environment variable, or a stored login from
+"hf auth login". With neither, downloads use anonymous rate limits and the plan
+notes it. Run "hf auth login" once (durable) or export HF_TOKEN for higher limits.
+
 Options:
 - dest: string — local directory to download into (required, ~ expanded)
 - include: string | string[] — only download paths matching these globs

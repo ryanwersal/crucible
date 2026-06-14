@@ -17,11 +17,11 @@ func TestDiffHF(t *testing.T) {
 		}
 	})
 
-	t.Run("missing — download with flags", func(t *testing.T) {
+	t.Run("missing and unauthenticated — download with flags and auth note", func(t *testing.T) {
 		t.Parallel()
 		got := DiffHF(DesiredHFDownload{
 			Repo: "u/r", Dest: "/d", Include: []string{"*.gguf"}, Revision: "main",
-		}, &fact.HFInfo{Available: true, Present: false})
+		}, &fact.HFInfo{Available: true, Present: false, Authenticated: false})
 		if len(got) != 1 {
 			t.Fatalf("expected 1 action, got %d", len(got))
 		}
@@ -37,6 +37,21 @@ func TestDiffHF(t *testing.T) {
 		}
 		if a.SerialGroup != "hf" {
 			t.Errorf("SerialGroup = %q, want hf", a.SerialGroup)
+		}
+		if a.Note == "" {
+			t.Error("expected an auth note when unauthenticated")
+		}
+	})
+
+	t.Run("missing and authenticated — no auth note", func(t *testing.T) {
+		t.Parallel()
+		got := DiffHF(DesiredHFDownload{Repo: "u/r", Dest: "/d"},
+			&fact.HFInfo{Available: true, Present: false, Authenticated: true})
+		if len(got) != 1 {
+			t.Fatalf("expected 1 action, got %d", len(got))
+		}
+		if got[0].Note != "" {
+			t.Errorf("expected no auth note when authenticated, got %q", got[0].Note)
 		}
 	})
 

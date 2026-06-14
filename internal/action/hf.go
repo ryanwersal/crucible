@@ -41,7 +41,7 @@ func DiffHF(d DesiredHFDownload, actual *fact.HFInfo) []Action {
 	if actual.Present {
 		return nil
 	}
-	return []Action{{
+	a := Action{
 		Type:        DownloadHF,
 		HFRepo:      d.Repo,
 		HFDest:      d.Dest,
@@ -50,5 +50,9 @@ func DiffHF(d DesiredHFDownload, actual *fact.HFInfo) []Action {
 		HFRevision:  d.Revision,
 		SerialGroup: "hf",
 		Description: fmt.Sprintf("hf download %s → %s", d.Repo, d.Dest),
-	}}
+	}
+	if !actual.Authenticated {
+		a.Note = "no HuggingFace auth detected — run `hf auth login` or set HF_TOKEN for higher rate limits"
+	}
+	return []Action{a}
 }

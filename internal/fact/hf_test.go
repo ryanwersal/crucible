@@ -51,3 +51,62 @@ func TestHFCollector_Presence(t *testing.T) {
 		}
 	})
 }
+
+func TestHFCollector_Authenticated(t *testing.T) {
+	// Not parallel: these mutate process env via t.Setenv.
+
+	t.Run("HF_TOKEN env set", func(t *testing.T) {
+		t.Setenv("HF_TOKEN", "hf_xxx")
+		info, err := HFCollector{}.Collect(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !info.Authenticated {
+			t.Error("expected Authenticated=true when HF_TOKEN is set")
+		}
+	})
+
+	t.Run("legacy HUGGING_FACE_HUB_TOKEN env set", func(t *testing.T) {
+		t.Setenv("HF_TOKEN", "")
+		t.Setenv("HUGGING_FACE_HUB_TOKEN", "hf_xxx")
+		info, err := HFCollector{}.Collect(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !info.Authenticated {
+			t.Error("expected Authenticated=true when HUGGING_FACE_HUB_TOKEN is set")
+		}
+	})
+
+	t.Run("stored token file via HF_HOME", func(t *testing.T) {
+		t.Setenv("HF_TOKEN", "")
+		t.Setenv("HUGGING_FACE_HUB_TOKEN", "")
+		t.Setenv("HF_TOKEN_PATH", "")
+		home := t.TempDir()
+		t.Setenv("HF_HOME", home)
+		if err := os.WriteFile(filepath.Join(home, "token"), []byte("hf_xxx"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		info, err := HFCollector{}.Collect(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !info.Authenticated {
+			t.Error("expected Authenticated=true when a stored token file exists")
+		}
+	})
+
+	t.Run("no token anywhere", func(t *testing.T) {
+		t.Setenv("HF_TOKEN", "")
+		t.Setenv("HUGGING_FACE_HUB_TOKEN", "")
+		t.Setenv("HF_TOKEN_PATH", "")
+		t.Setenv("HF_HOME", t.TempDir()) // empty dir, no token file
+		info, err := HFCollector{}.Collect(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Authenticated {
+			t.Error("expected Authenticated=false with no token configured")
+		}
+	})
+}

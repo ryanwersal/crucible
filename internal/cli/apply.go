@@ -202,6 +202,7 @@ type treeEntry struct {
 	symbol string // "✓", "→", or "⚠"
 	desc   string
 	reason string // populated only for destructive entries
+	note   string // optional advisory line (e.g. missing HF auth)
 }
 
 // writeGroupedTree renders observations and actions as a tree grouped by resource type.
@@ -230,7 +231,7 @@ func writeGroupedTree(w io.Writer, observations []action.Observation, actions []
 		if a.NeedsSudo {
 			desc = "[sudo] " + desc
 		}
-		entry := treeEntry{symbol: "→", desc: desc}
+		entry := treeEntry{symbol: "→", desc: desc, note: a.Note}
 		if a.Destructive {
 			entry.symbol = "⚠"
 			entry.reason = a.DestructiveReason
@@ -244,6 +245,9 @@ func writeGroupedTree(w io.Writer, observations []action.Observation, actions []
 			_, _ = fmt.Fprintf(w, "    %s %s\n", e.symbol, e.desc)
 			if e.reason != "" {
 				_, _ = fmt.Fprintf(w, "        destructive: %s\n", e.reason)
+			}
+			if e.note != "" {
+				_, _ = fmt.Fprintf(w, "        note: %s\n", e.note)
 			}
 		}
 	}
