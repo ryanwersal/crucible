@@ -246,8 +246,10 @@ Declare locally managed Ollama models. Present models are pulled; absent ones
 are removed. A model reference may be a registry model, a user-namespaced
 model, or any GGUF on HuggingFace (hf.co/<user>/<repo>:<quant>). A reference
 without a tag defaults to ":latest". Installed models are detected from
-Ollama's on-disk store, so planning does not require the Ollama server; pulling
-and removing do (run the Ollama app or "ollama serve").
+Ollama's on-disk store, so planning does not require the Ollama server. Pulling
+and removing do; if no server is reachable, crucible starts a temporary
+"ollama serve" for the run and stops it afterward. A server you already run (the
+Ollama app or a manual "ollama serve") is used as-is and left running.
 
 Examples:
   c.ollama("llama3.1:8b")

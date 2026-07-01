@@ -258,6 +258,15 @@ func (e *Engine) ApplyResultWithOptions(ctx context.Context, result action.PlanR
 		opts.Concurrency = 1
 	}
 
+	// Release per-run executor resources (e.g. a temporary Ollama server started
+	// to service model pulls) once the run finishes, on every return path
+	// including cancellation. Executors that hold none are no-ops.
+	defer func() {
+		if err := e.registry.Close(); err != nil {
+			e.logger.Warn("releasing executor resources", "err", err)
+		}
+	}()
+
 	// PTY-backed live progress is only meaningful when attached to a terminal;
 	// outside interactive mode (CI, piped, log observer) clear the flag so the
 	// executor uses clean piped output instead of \r progress frames. This is

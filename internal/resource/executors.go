@@ -278,27 +278,45 @@ func (UninstallMiseToolExecutor) Execute(ctx context.Context, a action.Action, s
 	return runCmd(ctx, a, stdin, stdout, stderr, "mise", "uninstall", a.MiseToolName)
 }
 
-// PullOllamaModelExecutor pulls a model via `ollama pull`. This requires the
-// Ollama server to be running (the macOS app, or `ollama serve`); if it isn't,
-// ollama prints a clear "could not connect" error which surfaces to the user.
-type PullOllamaModelExecutor struct{}
+// PullOllamaModelExecutor pulls a model via `ollama pull`. `ollama pull` is an
+// HTTP client that needs the Ollama server running; the shared server manager
+// ensures one is up (starting a temporary `ollama serve` if the user has none),
+// so a pull works whether or not the desktop app is open.
+type PullOllamaModelExecutor struct {
+	server *ollamaServer
+}
 
 func (PullOllamaModelExecutor) ActionType() action.Type { return action.PullOllamaModel }
 func (PullOllamaModelExecutor) ActionName() string      { return "PullOllamaModel" }
 
-func (PullOllamaModelExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
+func (e PullOllamaModelExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
+	if err := e.server.ensure(ctx, stdout); err != nil {
+		return err
+	}
 	return runCmd(ctx, a, stdin, stdout, stderr, "ollama", "pull", a.OllamaModel)
 }
 
-// RemoveOllamaModelExecutor removes a locally installed model via `ollama rm`.
-type RemoveOllamaModelExecutor struct{}
+// Close stops the temporary Ollama server if this executor's manager started one.
+func (e PullOllamaModelExecutor) Close() error { return e.server.Close() }
+
+// RemoveOllamaModelExecutor removes a locally installed model via `ollama rm`,
+// which — like pull — needs a running server, ensured via the shared manager.
+type RemoveOllamaModelExecutor struct {
+	server *ollamaServer
+}
 
 func (RemoveOllamaModelExecutor) ActionType() action.Type { return action.RemoveOllamaModel }
 func (RemoveOllamaModelExecutor) ActionName() string      { return "RemoveOllamaModel" }
 
-func (RemoveOllamaModelExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
+func (e RemoveOllamaModelExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
+	if err := e.server.ensure(ctx, stdout); err != nil {
+		return err
+	}
 	return runCmd(ctx, a, stdin, stdout, stderr, "ollama", "rm", a.OllamaModel)
 }
+
+// Close stops the temporary Ollama server if this executor's manager started one.
+func (e RemoveOllamaModelExecutor) Close() error { return e.server.Close() }
 
 // DownloadHFExecutor downloads a HuggingFace repo into a local directory via
 // `hf download`. hf is idempotent — already-present files are verified and

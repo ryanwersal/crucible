@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -79,6 +80,22 @@ func (r *Registry) Execute(ctx context.Context, a action.Action, stdin io.Reader
 	return e.Execute(ctx, a, stdin, stdout, stderr)
 }
 
+// Close releases any per-run resources held by executors — currently the
+// temporary Ollama server started to service pulls/removes. It is invoked by the
+// engine after an apply run and is safe to call multiple times; executors that
+// hold no such resources are skipped. The registry remains reusable afterward.
+func (r *Registry) Close() error {
+	var errs []error
+	for _, e := range r.executors {
+		if c, ok := e.(io.Closer); ok {
+			if err := c.Close(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // Validate checks internal consistency of the registry. It verifies that:
 //   - every registered decl type has exactly one handler (not both handler and batcher)
 //   - every registered action type has a name (guaranteed by construction, but defensive)
@@ -134,7 +151,10 @@ var (
 )
 
 // DefaultRegistry returns a registry with all built-in handlers and executors.
-// It is safe to call concurrently; the registry is initialized once.
+// It is safe to call concurrently; the registry is initialized once. Note that
+// Close mutates shared per-run executor state (the temporary Ollama server), so
+// it is meant for serial per-run teardown — one apply at a time per process, as
+// the CLI does — not concurrent applies sharing this singleton.
 func DefaultRegistry() *Registry {
 	defaultRegistryOnce.Do(func() {
 		defaultRegistry = newDefaultRegistry()
@@ -188,8 +208,11 @@ func newDefaultRegistry() *Registry {
 	r.RegisterExecutor(RemoveKeyRemapExecutor{})
 	r.RegisterExecutor(SetDisplayExecutor{})
 	r.RegisterExecutor(RunScriptExecutor{})
-	r.RegisterExecutor(PullOllamaModelExecutor{})
-	r.RegisterExecutor(RemoveOllamaModelExecutor{})
+	// Pull and remove share one server manager so a temporary `ollama serve` is
+	// started at most once per run and torn down once via Registry.Close.
+	ollamaSrv := &ollamaServer{}
+	r.RegisterExecutor(PullOllamaModelExecutor{server: ollamaSrv})
+	r.RegisterExecutor(RemoveOllamaModelExecutor{server: ollamaSrv})
 	r.RegisterExecutor(DownloadHFExecutor{})
 
 	return r
