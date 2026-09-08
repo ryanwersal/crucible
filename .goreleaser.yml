@@ -31,12 +31,13 @@ homebrew_casks:
     # Strip Gatekeeper quarantine from the unsigned binary so it runs on
     # first launch without "cannot be opened because the developer cannot
     # be verified".
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/crucible"]
-          end
+    # GoReleaser's post-install hook emits the deprecated postflight stanza.
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "crucible"], chdir: ".", must_succeed: false
+        end
+      end
     repository:
       owner: ryanwersal
       name: homebrew-tools
