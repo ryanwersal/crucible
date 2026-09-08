@@ -8,15 +8,32 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ryanwersal/crucible/internal/action"
+	"github.com/ryanwersal/crucible/internal/fact"
 	"github.com/ryanwersal/crucible/internal/resource"
 	"github.com/ryanwersal/crucible/internal/script"
 )
+
+// newPlanningTestEngine keeps planning tests independent of installed system tools.
+func newPlanningTestEngine(sourceDir, targetDir string) *Engine {
+	eng := New(sourceDir, targetDir, slog.New(slog.DiscardHandler))
+	seedPlanningFacts(eng)
+	return eng
+}
+
+func seedPlanningFacts(eng *Engine) {
+	store := fact.NewStore()
+	fact.Set(store, "os", &fact.OSInfo{OS: runtime.GOOS, Arch: runtime.GOARCH})
+	fact.Set(store, "homebrew", &fact.HomebrewInfo{Available: false})
+	fact.Set(store, "mas", &fact.MasInfo{Available: false})
+	eng.SetFactStore(store)
+}
 
 func mustWriteFile(t *testing.T, path string, data []byte, perm os.FileMode) {
 	t.Helper()
@@ -37,7 +54,7 @@ func TestPlan_NoScript_Fails(t *testing.T) {
 	src := t.TempDir()
 	tgt := t.TempDir()
 
-	eng := New(src, tgt, slog.New(slog.DiscardHandler))
+	eng := newPlanningTestEngine(src, tgt)
 	_, err := eng.Plan(context.Background())
 	if err == nil {
 		t.Fatal("expected error when crucible.js is missing")
@@ -52,7 +69,7 @@ func TestPlan_ExplicitScriptFile_NotFound(t *testing.T) {
 	src := t.TempDir()
 	tgt := t.TempDir()
 
-	eng := New(src, tgt, slog.New(slog.DiscardHandler))
+	eng := newPlanningTestEngine(src, tgt)
 	eng.SetScriptFile(filepath.Join(src, "nonexistent.js"))
 	_, err := eng.Plan(context.Background())
 	if err == nil {
@@ -73,7 +90,7 @@ func TestPlan_Script(t *testing.T) {
 	`
 	mustWriteFile(t, filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
 
-	eng := New(src, tgt, slog.New(slog.DiscardHandler))
+	eng := newPlanningTestEngine(src, tgt)
 	result, err := eng.Plan(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +127,7 @@ func TestPlan_Script_CheckPasses(t *testing.T) {
 	`
 	mustWriteFile(t, filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
 
-	eng := New(src, tgt, slog.New(slog.DiscardHandler))
+	eng := newPlanningTestEngine(src, tgt)
 	result, err := eng.Plan(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +158,7 @@ func TestPlan_Script_CheckFailsSkips(t *testing.T) {
 	`
 	mustWriteFile(t, filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
 
-	eng := New(src, tgt, slog.New(slog.DiscardHandler))
+	eng := newPlanningTestEngine(src, tgt)
 	result, err := eng.Plan(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -176,7 +193,7 @@ func TestApply_Script(t *testing.T) {
 	`
 	mustWriteFile(t, filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
 
-	eng := New(src, tgt, slog.New(slog.DiscardHandler))
+	eng := newPlanningTestEngine(src, tgt)
 	if _, err := eng.Apply(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +222,7 @@ func TestPlan_Script_SourceFile(t *testing.T) {
 	`
 	mustWriteFile(t, filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
 
-	eng := New(src, tgt, slog.New(slog.DiscardHandler))
+	eng := newPlanningTestEngine(src, tgt)
 	if _, err := eng.Apply(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -232,11 +249,13 @@ func TestPlan_Script_Idempotent(t *testing.T) {
 	`
 	mustWriteFile(t, filepath.Join(src, "crucible.js"), []byte(scriptContent), 0o644)
 
-	eng := New(src, tgt, slog.New(slog.DiscardHandler))
+	eng := newPlanningTestEngine(src, tgt)
 	if _, err := eng.Apply(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
+	// Match a fresh plan's store so file facts reflect the preceding apply.
+	seedPlanningFacts(eng)
 	result, err := eng.Plan(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -767,7 +786,7 @@ func TestPlan_ExplicitScriptFile(t *testing.T) {
 	`
 	mustWriteFile(t, filepath.Join(altDir, "my-config.js"), []byte(scriptContent), 0o644)
 
-	eng := New(src, tgt, slog.New(slog.DiscardHandler))
+	eng := newPlanningTestEngine(src, tgt)
 	eng.SetScriptFile(filepath.Join(altDir, "my-config.js"))
 	result, err := eng.Plan(context.Background())
 	if err != nil {

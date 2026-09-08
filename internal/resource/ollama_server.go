@@ -81,7 +81,7 @@ func (s *ollamaServer) ensure(ctx context.Context, out io.Writer) error {
 		return nil
 	}
 
-	fmt.Fprintln(out, "ollama server not running — starting a temporary one")
+	_, _ = fmt.Fprintln(out, "ollama server not running — starting a temporary one")
 
 	start := s.startFn
 	if start == nil {
