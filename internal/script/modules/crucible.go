@@ -45,6 +45,7 @@ func (m *CrucibleModule) Export(facts *FactsModule) *goja.Object {
 	_ = obj.Set("git", m.git)
 	_ = obj.Set("font", m.font)
 	_ = obj.Set("mas", m.mas)
+	_ = obj.Set("vscode", m.vscode)
 	_ = obj.Set("mise", m.mise)
 	_ = obj.Set("ollama", m.ollama)
 	_ = obj.Set("hf", m.hf)

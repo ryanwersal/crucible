@@ -330,6 +330,27 @@ Examples:
   c.display({ resolution: "1800x1169", hz: 120 })
   c.display({ sidebarIconSize: "small", menuBarSpacing: "compact", resolution: "1800x1169", hz: 120 })
 
+## c.vscode(extensions, options?)
+
+Manage VS Code extensions by publisher.name ID. Accepts a string or array of
+strings. IDs are case-insensitive. Options: state: "present" (default) or "absent".
+Installs missing extensions and uninstalls explicitly absent extensions. Existing
+extensions are left at their installed version; VS Code manages their updates.
+Bundled extensions satisfy present declarations and cannot be uninstalled.
+Conflicting declarations for the same ID are rejected.
+
+Uses the code CLI on PATH and its default profile. Bundled extensions are detected
+relative to the resolved bin/code: ../extensions on macOS and
+../resources/app/extensions on Linux.
+If code is unavailable, reports a skip: install VS Code separately (for example
+with c.brew("visual-studio-code")) and rerun crucible. Extension changes run serially.
+Version pins, VSIX paths, custom profiles, and state: "latest" are not supported.
+
+Examples:
+  c.vscode("GitHub.vscode-pull-request-github")
+  c.vscode(["esbenp.prettier-vscode", "dbaeumer.vscode-eslint"])
+  c.vscode("publisher.extension", { state: "absent" })
+
 ## c.script(name, options)
 
 Declare a tool installed via a shell command. The check command determines
@@ -457,22 +478,23 @@ func writeTemplateData(b *strings.Builder) {
 }
 
 var declTypeDescriptions = map[decl.Type]string{
-	decl.File:        "Managed file — created or updated with specified content, source, or template",
-	decl.Dir:         "Managed directory — created with specified permissions",
-	decl.Symlink:     "Managed symlink — points to a target path",
-	decl.Package:     "Homebrew package — installed or uninstalled via brew",
-	decl.Defaults:    "macOS defaults key — set or deleted in a preference domain",
-	decl.Dock:        "macOS Dock layout — apps and folders in the Dock",
-	decl.GitRepo:     "Git repository — cloned or updated at a path",
-	decl.Font:        "Font file — installed to the fonts directory",
-	decl.MiseTool:    "Mise tool — globally installed version manager tool",
-	decl.Shell:       "Login shell — sets the user's default shell",
-	decl.MasApp:      "Mac App Store app — installed via mas",
-	decl.KeyRemap:    "Keyboard modifier remap — applied globally via hidutil with LaunchAgent persistence",
-	decl.Display:     "Display density — sidebar icon size, menu bar spacing, and resolution scaling",
-	decl.Script:      "Script-installed tool — installed via a shell command, checked by a command's exit code",
-	decl.OllamaModel: "Ollama model — pulled or removed from the local Ollama model store",
-	decl.HFDownload:  "HuggingFace download — repo files fetched into a local directory via the hf CLI",
+	decl.File:            "Managed file — created or updated with specified content, source, or template",
+	decl.Dir:             "Managed directory — created with specified permissions",
+	decl.Symlink:         "Managed symlink — points to a target path",
+	decl.Package:         "Homebrew package — installed or uninstalled via brew",
+	decl.Defaults:        "macOS defaults key — set or deleted in a preference domain",
+	decl.Dock:            "macOS Dock layout — apps and folders in the Dock",
+	decl.GitRepo:         "Git repository — cloned or updated at a path",
+	decl.Font:            "Font file — installed to the fonts directory",
+	decl.MiseTool:        "Mise tool — globally installed version manager tool",
+	decl.Shell:           "Login shell — sets the user's default shell",
+	decl.MasApp:          "Mac App Store app — installed via mas",
+	decl.KeyRemap:        "Keyboard modifier remap — applied globally via hidutil with LaunchAgent persistence",
+	decl.Display:         "Display density — sidebar icon size, menu bar spacing, and resolution scaling",
+	decl.VSCodeExtension: "VS Code extension — installed or absent, including bundled extension detection",
+	decl.Script:          "Script-installed tool — installed via a shell command, checked by a command's exit code",
+	decl.OllamaModel:     "Ollama model — pulled or removed from the local Ollama model store",
+	decl.HFDownload:      "HuggingFace download — repo files fetched into a local directory via the hf CLI",
 }
 
 func writeDeclTypes(b *strings.Builder, reg *resource.Registry) {
@@ -490,31 +512,33 @@ func writeDeclTypes(b *strings.Builder, reg *resource.Registry) {
 }
 
 var actionTypeDescriptions = map[action.Type]string{
-	action.WriteFile:         "Write or update a file's content",
-	action.CreateDir:         "Create a directory",
-	action.CreateSymlink:     "Create or update a symlink",
-	action.SetPermissions:    "Set file or directory permissions",
-	action.DeletePath:        "Remove a file, directory, or symlink",
-	action.InstallPackage:    "Install a Homebrew package",
-	action.UpgradePackage:    "Upgrade an installed Homebrew package to the current version",
-	action.SetDefaults:       "Write a macOS defaults key",
-	action.SetDock:           "Set the macOS Dock layout",
-	action.CloneRepo:         "Clone a git repository",
-	action.PullRepo:          "Pull updates in an existing git repository",
-	action.InstallFont:       "Install a font file",
-	action.InstallMiseTool:   "Install a mise tool at a specific version",
-	action.SetShell:          "Change the user's login shell",
-	action.UninstallPackage:  "Uninstall a Homebrew package",
-	action.UninstallMiseTool: "Uninstall a mise tool",
-	action.DeleteDefaults:    "Delete a macOS defaults key",
-	action.InstallMasApp:     "Install a Mac App Store app",
-	action.SetKeyRemap:       "Apply keyboard modifier remappings via hidutil and write LaunchAgent",
-	action.RemoveKeyRemap:    "Clear keyboard modifier remappings and remove LaunchAgent",
-	action.SetDisplay:        "Apply display density settings via defaults and CoreGraphics",
-	action.RunScript:         "Run a shell command to install a tool",
-	action.PullOllamaModel:   "Pull an Ollama model via ollama pull",
-	action.RemoveOllamaModel: "Remove an Ollama model via ollama rm",
-	action.DownloadHF:        "Download a HuggingFace repo into a local directory via hf download",
+	action.WriteFile:                "Write or update a file's content",
+	action.CreateDir:                "Create a directory",
+	action.CreateSymlink:            "Create or update a symlink",
+	action.SetPermissions:           "Set file or directory permissions",
+	action.DeletePath:               "Remove a file, directory, or symlink",
+	action.InstallPackage:           "Install a Homebrew package",
+	action.UpgradePackage:           "Upgrade an installed Homebrew package to the current version",
+	action.SetDefaults:              "Write a macOS defaults key",
+	action.SetDock:                  "Set the macOS Dock layout",
+	action.CloneRepo:                "Clone a git repository",
+	action.PullRepo:                 "Pull updates in an existing git repository",
+	action.InstallFont:              "Install a font file",
+	action.InstallMiseTool:          "Install a mise tool at a specific version",
+	action.SetShell:                 "Change the user's login shell",
+	action.UninstallPackage:         "Uninstall a Homebrew package",
+	action.UninstallMiseTool:        "Uninstall a mise tool",
+	action.DeleteDefaults:           "Delete a macOS defaults key",
+	action.InstallMasApp:            "Install a Mac App Store app",
+	action.SetKeyRemap:              "Apply keyboard modifier remappings via hidutil and write LaunchAgent",
+	action.RemoveKeyRemap:           "Clear keyboard modifier remappings and remove LaunchAgent",
+	action.SetDisplay:               "Apply display density settings via defaults and CoreGraphics",
+	action.InstallVSCodeExtension:   "Install a missing VS Code extension",
+	action.UninstallVSCodeExtension: "Uninstall a VS Code extension",
+	action.RunScript:                "Run a shell command to install a tool",
+	action.PullOllamaModel:          "Pull an Ollama model via ollama pull",
+	action.RemoveOllamaModel:        "Remove an Ollama model via ollama rm",
+	action.DownloadHF:               "Download a HuggingFace repo into a local directory via hf download",
 }
 
 func writeActionTypes(b *strings.Builder, reg *resource.Registry) {

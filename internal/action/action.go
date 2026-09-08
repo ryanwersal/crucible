@@ -37,6 +37,8 @@ const (
 	PullOllamaModel
 	RemoveOllamaModel
 	DownloadHF
+	InstallVSCodeExtension
+	UninstallVSCodeExtension
 )
 
 var typeNames sync.Map
@@ -90,14 +92,16 @@ type Action struct {
 	ScriptName              string          // RunScript: tool name
 	ScriptInstall           string          // RunScript: shell command to run
 	OllamaModel             string          // PullOllamaModel, RemoveOllamaModel: model reference
-	HFRepo                  string          // DownloadHF: HuggingFace repo id
-	HFDest                  string          // DownloadHF: local download directory
-	HFInclude               []string        // DownloadHF: --include globs
-	HFExclude               []string        // DownloadHF: --exclude globs
-	HFRevision              string          // DownloadHF: git revision/branch/tag
-	NeedsSudo               bool            // action requires privilege escalation
-	PTY                     bool            // run the subprocess under a pseudo-terminal so it emits TTY-style live progress (used for large downloads); honored only in interactive mode
-	SerialGroup             string          // actions sharing a non-empty SerialGroup run in plan order, never concurrently — for tools that take exclusive global locks (e.g. Homebrew's per-Cellar locks)
+	VSCodeExtension         string
+	VSCodeCommand           string
+	HFRepo                  string   // DownloadHF: HuggingFace repo id
+	HFDest                  string   // DownloadHF: local download directory
+	HFInclude               []string // DownloadHF: --include globs
+	HFExclude               []string // DownloadHF: --exclude globs
+	HFRevision              string   // DownloadHF: git revision/branch/tag
+	NeedsSudo               bool     // action requires privilege escalation
+	PTY                     bool     // run the subprocess under a pseudo-terminal so it emits TTY-style live progress (used for large downloads); honored only in interactive mode
+	SerialGroup             string   // actions sharing a non-empty SerialGroup run in plan order, never concurrently — for tools that take exclusive global locks (e.g. Homebrew's per-Cellar locks)
 
 	// Destructive flags an action that would irrevocably destroy user content
 	// that crucible did not itself create — for example, removing a regular

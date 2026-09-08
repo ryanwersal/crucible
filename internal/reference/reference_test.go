@@ -67,7 +67,7 @@ func TestBuildContainsAllJSAPIFunctions(t *testing.T) {
 	jsFuncs := []string{
 		"file", "dir", "symlink", "brew", "defaults", "dock",
 		"git", "font", "mas", "mise", "ollama", "hf", "shell",
-		"keyRemap", "display", "script", "log",
+		"keyRemap", "display", "script", "log", "vscode",
 	}
 	for _, name := range jsFuncs {
 		target := "c." + name + "("

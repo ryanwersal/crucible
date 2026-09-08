@@ -183,6 +183,7 @@ func newDefaultRegistry() *Registry {
 	r.RegisterBatchHandler(FontHandler{})
 	r.RegisterBatchHandler(MiseToolHandler{Resolver: fact.MiseResolver{}})
 	r.RegisterBatchHandler(MasHandler{})
+	r.RegisterBatchHandler(VSCodeExtensionHandler{})
 	r.RegisterBatchHandler(OllamaModelHandler{})
 
 	// Action executors
@@ -204,6 +205,8 @@ func newDefaultRegistry() *Registry {
 	r.RegisterExecutor(UninstallMiseToolExecutor{})
 	r.RegisterExecutor(SetShellExecutor{})
 	r.RegisterExecutor(InstallMasAppExecutor{})
+	r.RegisterExecutor(InstallVSCodeExtensionExecutor{})
+	r.RegisterExecutor(UninstallVSCodeExtensionExecutor{})
 	r.RegisterExecutor(SetKeyRemapExecutor{})
 	r.RegisterExecutor(RemoveKeyRemapExecutor{})
 	r.RegisterExecutor(SetDisplayExecutor{})
