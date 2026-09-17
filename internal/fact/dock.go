@@ -7,10 +7,13 @@ import (
 	"github.com/ryanwersal/crucible/internal/action/dock"
 )
 
-// DockInfo holds the current macOS Dock layout.
+// DockInfo holds the current macOS Dock layout and settings.
 type DockInfo struct {
-	Apps    []string
-	Folders []DockFolderInfo
+	Apps        []string
+	Folders     []DockFolderInfo
+	Autohide    *bool // nil when the key is absent
+	TileSize    int   // 0 when the key is absent
+	ShowRecents *bool // nil when the key is absent
 }
 
 // DockFolderInfo describes a folder entry in the Dock.
@@ -33,7 +36,12 @@ func (c DockCollector) Collect(ctx context.Context) (*DockInfo, error) {
 		return nil, err
 	}
 
-	info := &DockInfo{Apps: state.Apps}
+	info := &DockInfo{
+		Apps:        state.Apps,
+		Autohide:    state.Settings.Autohide,
+		TileSize:    state.Settings.TileSize,
+		ShowRecents: state.Settings.ShowRecents,
+	}
 	for _, f := range state.Folders {
 		info.Folders = append(info.Folders, DockFolderInfo{
 			Path:    f.Path,

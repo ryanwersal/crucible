@@ -10,6 +10,7 @@ import (
 type DesiredScript struct {
 	Name    string // human-readable name (e.g. "claude-code")
 	Install string // shell command to install the tool
+	Sudo    bool   // run install with privilege escalation
 }
 
 // DiffScript compares the desired script-installed tool against its current state.
@@ -23,5 +24,6 @@ func DiffScript(desired DesiredScript, actual *fact.ScriptInfo) []Action {
 		ScriptName:    desired.Name,
 		ScriptInstall: desired.Install,
 		Description:   fmt.Sprintf("run: %s", desired.Install),
+		NeedsSudo:     desired.Sudo,
 	}}
 }

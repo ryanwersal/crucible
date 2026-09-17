@@ -7,10 +7,8 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strings"
 
 	"golang.org/x/sync/errgroup"
@@ -159,7 +157,7 @@ func (e *Engine) planScript(ctx context.Context, store *fact.Store, scriptConten
 // dispatching each declaration to the appropriate registry handler.
 func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, decls []decl.Declaration) (action.PlanResult, error) {
 	var result action.PlanResult
-	env := resource.Env{SourceDir: e.sourceDir, TargetDir: e.targetDir}
+	env := resource.Env{SourceDir: e.sourceDir, TargetDir: e.targetDir, Declarations: decls}
 
 	batched := make(map[decl.Type][]decl.Declaration)
 	for _, d := range decls {
@@ -202,6 +200,7 @@ func (e *Engine) declarationsToResult(ctx context.Context, store *fact.Store, de
 		result.Observations = append(result.Observations, out.Observations...)
 	}
 
+	action.OrderHomebrewActions(result.Actions)
 	return result, nil
 }
 
@@ -277,34 +276,43 @@ func (e *Engine) ApplyResultWithOptions(ctx context.Context, result action.PlanR
 		}
 	}
 
-	// Pre-acquire sudo credentials if any action needs privilege escalation.
-	if needsSudo(result.Actions) {
-		e.logger.Info("pre-acquiring sudo credentials")
-		cmd := exec.CommandContext(ctx, "sudo", "-v")
-		cmd.Stdin = e.stdin
-		cmd.Stdout = e.stdout
-		cmd.Stderr = e.stderr
-		if err := cmd.Run(); err != nil {
-			return ApplyResult{}, fmt.Errorf("sudo credential acquisition failed: %w", err)
-		}
-	}
-
-	// Partition actions: SetShell needs stdin and must run sequentially.
-	concurrent := make([]indexedAction, 0, len(result.Actions))
-	var sequential []indexedAction
-	for i, a := range result.Actions {
-		if a.Type == action.SetShell {
-			sequential = append(sequential, indexedAction{index: i, action: a})
-		} else {
-			concurrent = append(concurrent, indexedAction{index: i, action: a})
-		}
+	if err := ctx.Err(); err != nil {
+		return ApplyResult{}, err
 	}
 
 	results := make([]ActionResult, len(result.Actions))
-
-	// Pre-populate actions so callers always have action metadata in results.
+	indexed := make([]indexedAction, len(result.Actions))
 	for i, a := range result.Actions {
-		results[i] = ActionResult{Action: a}
+		results[i] = ActionResult{Action: a, Err: context.Canceled}
+		indexed[i] = indexedAction{index: i, action: a}
+	}
+
+	// Commands that may prompt run while the terminal is available. Keep whole
+	// dependency chains together so moving a sudo command cannot move it ahead
+	// of an earlier action on the same path or serial group.
+	var concurrent, privileged, sequential []indexedAction
+	for _, chain := range groupChains(indexed) {
+		var needsSudo, needsShell bool
+		for _, ia := range chain {
+			needsSudo = needsSudo || ia.action.NeedsSudo
+			needsShell = needsShell || ia.action.Type == action.SetShell
+		}
+		switch {
+		case needsSudo:
+			privileged = append(privileged, chain...)
+		case needsShell:
+			sequential = append(sequential, chain...)
+		default:
+			concurrent = append(concurrent, chain...)
+		}
+	}
+
+	if err := e.runTerminalActions(ctx, privileged, results, opts.Observer); err != nil {
+		return ApplyResult{Results: results}, err
+	}
+
+	if opts.BeforeActions != nil {
+		opts.BeforeActions()
 	}
 
 	// Run concurrent actions.
@@ -312,26 +320,41 @@ func (e *Engine) ApplyResultWithOptions(ctx context.Context, result action.PlanR
 		e.runConcurrent(ctx, concurrent, results, opts)
 	}
 
-	// Run sequential (stdin-needing) actions.
-	for _, ia := range sequential {
-		if ctx.Err() != nil {
-			break
-		}
-		if opts.Observer != nil {
-			opts.Observer.ActionStarted(ia.index, ia.action)
-		}
-		err := e.registry.Execute(ctx, ia.action, e.stdin, e.stdout, e.stderr)
-		results[ia.index] = ActionResult{Action: ia.action, Err: err}
-		if opts.Observer != nil {
-			opts.Observer.ActionCompleted(ia.index, ia.action, err)
-		}
-	}
-
 	if opts.Observer != nil {
 		opts.Observer.Wait()
 	}
 
-	return ApplyResult{Results: results}, nil
+	// Shell changes may depend on packages installed above. Stop rendering
+	// before handing the terminal to chsh's authentication prompt.
+	if err := e.runTerminalActions(ctx, sequential, results, opts.Observer); err != nil {
+		return ApplyResult{Results: results}, err
+	}
+	return ApplyResult{Results: results}, ctx.Err()
+}
+
+func (e *Engine) runTerminalActions(ctx context.Context, actions []indexedAction, results []ActionResult, observer ActionObserver) error {
+	for _, ia := range actions {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		e.logger.Info(ia.action.Description)
+		if observer != nil {
+			observer.ActionStarted(ia.index, ia.action)
+		}
+		err := e.registry.Execute(ctx, ia.action, e.stdin, e.stdout, e.stderr)
+		results[ia.index] = ActionResult{Action: ia.action, Err: err}
+		if observer != nil {
+			observer.ActionCompleted(ia.index, ia.action, err)
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err != nil {
+			return fmt.Errorf("%s: %w", ia.action.Description, err)
+		}
+	}
+
+	return nil
 }
 
 type indexedAction struct {
@@ -497,11 +520,4 @@ func stampGroup(acts []action.Action, obs []action.Observation, group string) {
 			obs[i].Group = group
 		}
 	}
-}
-
-// needsSudo reports whether any action requires privilege escalation.
-func needsSudo(actions []action.Action) bool {
-	return slices.ContainsFunc(actions, func(a action.Action) bool {
-		return a.NeedsSudo
-	})
 }

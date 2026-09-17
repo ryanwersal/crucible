@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -12,10 +13,25 @@ import (
 	"howett.net/plist"
 )
 
-// PlistState represents the dock layout extracted from the plist.
+// PlistState represents the dock layout and settings extracted from the plist.
 type PlistState struct {
-	Apps    []string      // app bundle paths from persistent-apps
-	Folders []FolderEntry // from persistent-others
+	Apps     []string      // app bundle paths from persistent-apps
+	Folders  []FolderEntry // from persistent-others
+	Settings Settings
+}
+
+// Settings holds Dock behavior keys. Nil pointers and a zero TileSize mean the
+// key is absent from the plist.
+type Settings struct {
+	Autohide    *bool // autohide
+	TileSize    int   // tilesize
+	ShowRecents *bool // show-recents
+}
+
+// Layout describes the persistent-apps and persistent-others entries to write.
+type Layout struct {
+	Apps    []string
+	Folders []FolderEntry
 }
 
 // FolderEntry describes a folder in the Dock's persistent-others.
@@ -40,13 +56,42 @@ func Read(path string) (*PlistState, error) {
 	state := &PlistState{}
 	state.Apps = extractApps(root)
 	state.Folders = extractFolders(root)
+	state.Settings = extractSettings(root)
 	return state, nil
 }
 
-// Write updates a dock plist file with the desired app and folder layout,
-// preserving all other dock settings. Each entry includes a security-scoped
-// bookmark, bundle identifier, and GUID so that macOS can resolve app icons.
-func Write(path string, apps []string, folders []FolderEntry) error {
+func extractSettings(root map[string]any) Settings {
+	var s Settings
+	if v, ok := root["autohide"].(bool); ok {
+		s.Autohide = &v
+	}
+	if v, ok := root["show-recents"].(bool); ok {
+		s.ShowRecents = &v
+	}
+	s.TileSize = intValue(root["tilesize"])
+	return s
+}
+
+func intValue(v any) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case uint64:
+		return int(n)
+	case float64:
+		return int(n)
+	default:
+		return 0
+	}
+}
+
+// Write updates a dock plist file with the desired layout (when non-nil) and
+// settings, preserving all other dock keys. Each layout entry includes a
+// security-scoped bookmark, bundle identifier, and GUID so that macOS can
+// resolve app icons.
+func Write(path string, layout *Layout, settings Settings) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read dock plist: %w", err)
@@ -57,17 +102,29 @@ func Write(path string, apps []string, folders []FolderEntry) error {
 		return fmt.Errorf("unmarshal dock plist: %w", err)
 	}
 
-	appEntries, err := buildAppEntries(apps)
-	if err != nil {
-		return fmt.Errorf("build app entries: %w", err)
-	}
-	folderEntries, err := buildFolderEntries(folders)
-	if err != nil {
-		return fmt.Errorf("build folder entries: %w", err)
+	if layout != nil {
+		appEntries, err := buildAppEntries(layout.Apps)
+		if err != nil {
+			return fmt.Errorf("build app entries: %w", err)
+		}
+		folderEntries, err := buildFolderEntries(layout.Folders)
+		if err != nil {
+			return fmt.Errorf("build folder entries: %w", err)
+		}
+
+		root["persistent-apps"] = appEntries
+		root["persistent-others"] = folderEntries
 	}
 
-	root["persistent-apps"] = appEntries
-	root["persistent-others"] = folderEntries
+	if settings.Autohide != nil {
+		root["autohide"] = *settings.Autohide
+	}
+	if settings.TileSize > 0 {
+		root["tilesize"] = uint64(settings.TileSize)
+	}
+	if settings.ShowRecents != nil {
+		root["show-recents"] = *settings.ShowRecents
+	}
 
 	out, err := plist.Marshal(root, plist.BinaryFormat)
 	if err != nil {
@@ -96,7 +153,7 @@ func buildAppEntries(apps []string) ([]any, error) {
 
 		tileData := map[string]any{
 			"file-data": map[string]any{
-				"_CFURLString":     "file://" + app + "/",
+				"_CFURLString":     fileURL(app),
 				"_CFURLStringType": uint64(15),
 			},
 			"file-label":      appLabel(app),
@@ -133,7 +190,7 @@ func buildFolderEntries(folders []FolderEntry) ([]any, error) {
 			"GUID": randGUID(),
 			"tile-data": map[string]any{
 				"file-data": map[string]any{
-					"_CFURLString":     "file://" + f.Path + "/",
+					"_CFURLString":     fileURL(f.Path),
 					"_CFURLStringType": uint64(15),
 				},
 				"file-label":        folderLabel(f.Path),
@@ -197,8 +254,7 @@ func extractApps(root map[string]any) []string {
 		if !ok {
 			continue
 		}
-		urlStr = strings.TrimPrefix(urlStr, "file://")
-		urlStr = strings.TrimRight(urlStr, "/")
+		urlStr = pathFromFileURL(urlStr)
 		paths = append(paths, urlStr)
 	}
 	return paths
@@ -228,8 +284,7 @@ func extractFolders(root map[string]any) []FolderEntry {
 		if !ok {
 			continue
 		}
-		urlStr = strings.TrimPrefix(urlStr, "file://")
-		urlStr = strings.TrimRight(urlStr, "/")
+		urlStr = pathFromFileURL(urlStr)
 
 		folder := FolderEntry{Path: urlStr}
 
@@ -291,4 +346,20 @@ func displayAsToDisplay(displayAs uint64) string {
 	default:
 		return "stack"
 	}
+}
+
+// fileURL renders a filesystem path as the percent-encoded file URL the Dock stores.
+func fileURL(path string) string {
+	u := url.URL{Scheme: "file", Path: path + "/"}
+	return u.String()
+}
+
+// pathFromFileURL decodes a Dock file URL back to a filesystem path.
+func pathFromFileURL(raw string) string {
+	trimmed := strings.TrimPrefix(raw, "file://")
+	trimmed = strings.TrimRight(trimmed, "/")
+	if decoded, err := url.PathUnescape(trimmed); err == nil {
+		return decoded
+	}
+	return trimmed
 }

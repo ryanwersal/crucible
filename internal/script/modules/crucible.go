@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"math"
 	"path/filepath"
 	"strings"
 
@@ -39,7 +40,11 @@ func (m *CrucibleModule) Export(facts *FactsModule) *goja.Object {
 	_ = obj.Set("file", m.file)
 	_ = obj.Set("dir", m.dir)
 	_ = obj.Set("symlink", m.symlink)
-	_ = obj.Set("brew", m.brew)
+	brew := m.vm.ToValue(m.brew).ToObject(m.vm)
+	_ = brew.Set("tap", m.brewTap)
+	_ = brew.Set("cask", m.brewCask)
+	_ = brew.Set("formula", m.brewFormula)
+	_ = obj.Set("brew", brew)
 	_ = obj.Set("defaults", m.defaults)
 	_ = obj.Set("dock", m.dock)
 	_ = obj.Set("git", m.git)
@@ -52,6 +57,7 @@ func (m *CrucibleModule) Export(facts *FactsModule) *goja.Object {
 	_ = obj.Set("shell", m.shell)
 	_ = obj.Set("keyRemap", m.keyRemap)
 	_ = obj.Set("display", m.display)
+	_ = obj.Set("macos", m.macos)
 	_ = obj.Set("script", m.script)
 	_ = obj.Set("log", m.log)
 	if facts != nil {
@@ -96,6 +102,21 @@ func (m *CrucibleModule) parsePackageState(opts *goja.Object) decl.State {
 	}
 }
 
+func (m *CrucibleModule) optBoolPtr(opts *goja.Object, key string) *bool {
+	if opts == nil {
+		return nil
+	}
+	v := opts.Get(key)
+	if v == nil || goja.IsUndefined(v) {
+		return nil
+	}
+	b, ok := v.Export().(bool)
+	if !ok {
+		panic(m.vm.NewGoError(fmt.Errorf("%s must be a boolean", key)))
+	}
+	return &b
+}
+
 // optString returns the string value of opts[key], or "" if unset.
 func optString(opts *goja.Object, key string) string {
 	if opts == nil {
@@ -138,6 +159,9 @@ func (m *CrucibleModule) file(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) >= 2 {
 		opts := call.Arguments[1].ToObject(m.vm)
 		if m.isAbsent(opts) {
+			if seed := m.optBoolPtr(opts, "seed"); seed != nil && *seed {
+				panic(m.vm.NewGoError(fmt.Errorf("file(): seed cannot be combined with state \"absent\"")))
+			}
 			d.State = decl.Absent
 		} else {
 			m.applyFileOpts(&d, opts)
@@ -165,6 +189,9 @@ func (m *CrucibleModule) applyFileOpts(decl *decl.Declaration, opts *goja.Object
 		decl.Mode = fs.FileMode(v.ToInteger())
 	}
 	decl.Check = optString(opts, "check")
+	if seed := m.optBoolPtr(opts, "seed"); seed != nil {
+		decl.Seed = *seed
+	}
 }
 
 // dir declares a managed directory.
@@ -357,35 +384,97 @@ func (m *CrucibleModule) dock(call goja.FunctionCall) goja.Value {
 	}
 
 	if v := opts.Get("apps"); v != nil && !goja.IsUndefined(v) {
-		exported := v.Export()
-		if arr, ok := exported.([]any); ok {
-			for _, item := range arr {
-				if s, ok := item.(string); ok {
-					d.DockApps = append(d.DockApps, s)
-				}
+		d.DockLayout = true
+		arr, ok := v.Export().([]any)
+		if !ok {
+			panic(m.vm.NewGoError(fmt.Errorf("dock(): apps must be an array of paths")))
+		}
+		for _, item := range arr {
+			path, ok := item.(string)
+			if !ok || path == "" {
+				panic(m.vm.NewGoError(fmt.Errorf("dock(): apps must contain non-empty paths")))
 			}
+			d.DockApps = append(d.DockApps, m.expandPath(path))
+		}
+	}
+	if v := opts.Get("folders"); v != nil && !goja.IsUndefined(v) {
+		d.DockLayout = true
+		arr, ok := v.Export().([]any)
+		if !ok {
+			panic(m.vm.NewGoError(fmt.Errorf("dock(): folders must be an array of objects")))
+		}
+		for _, item := range arr {
+			fm, ok := item.(map[string]any)
+			if !ok {
+				panic(m.vm.NewGoError(fmt.Errorf("dock(): folders must contain objects")))
+			}
+			path, ok := fm["path"].(string)
+			if !ok || path == "" {
+				panic(m.vm.NewGoError(fmt.Errorf("dock(): folders require a non-empty path")))
+			}
+			folder := decl.DockFolder{Path: m.expandPath(path), View: "auto", Display: "stack"}
+			if value, exists := fm["view"]; exists {
+				view, ok := value.(string)
+				if !ok || (view != "auto" && view != "grid" && view != "list" && view != "fan") {
+					panic(m.vm.NewGoError(fmt.Errorf("dock(): folder view must be auto, grid, list, or fan")))
+				}
+				folder.View = view
+			}
+			if value, exists := fm["display"]; exists {
+				display, ok := value.(string)
+				if !ok || (display != "stack" && display != "folder") {
+					panic(m.vm.NewGoError(fmt.Errorf("dock(): folder display must be stack or folder")))
+				}
+				folder.Display = display
+			}
+			d.DockFolders = append(d.DockFolders, folder)
 		}
 	}
 
-	if v := opts.Get("folders"); v != nil && !goja.IsUndefined(v) {
-		exported := v.Export()
-		if arr, ok := exported.([]any); ok {
-			for _, item := range arr {
-				if fm, ok := item.(map[string]any); ok {
-					folder := decl.DockFolder{}
-					if p, ok := fm["path"].(string); ok {
-						folder.Path = m.expandPath(p)
-					}
-					if view, ok := fm["view"].(string); ok {
-						folder.View = view
-					}
-					if display, ok := fm["display"].(string); ok {
-						folder.Display = display
-					}
-					d.DockFolders = append(d.DockFolders, folder)
-				}
-			}
+	d.DockSettings.Autohide = m.optBoolPtr(opts, "autohide")
+	d.DockSettings.ShowRecents = m.optBoolPtr(opts, "showRecents")
+	if v := opts.Get("tileSize"); v != nil && !goja.IsUndefined(v) {
+		number := v.ToFloat()
+		switch v.Export().(type) {
+		case int64, float64:
+		default:
+			panic(m.vm.NewGoError(fmt.Errorf("dock(): tileSize must be a positive integer")))
 		}
+		size := int(number)
+		if math.IsNaN(number) || math.IsInf(number, 0) || size <= 0 || float64(size) != number {
+			panic(m.vm.NewGoError(fmt.Errorf("dock(): tileSize must be a positive integer")))
+		}
+		d.DockSettings.TileSize = size
+	}
+
+	if !d.DockLayout && d.DockSettings.Autohide == nil && d.DockSettings.ShowRecents == nil && d.DockSettings.TileSize == 0 {
+		panic(m.vm.NewGoError(fmt.Errorf("dock() requires at least one of: apps, folders, autohide, tileSize, showRecents")))
+	}
+
+	*m.declarations = append(*m.declarations, d)
+	return goja.Undefined()
+}
+
+// macos declares macOS system tweaks. Omitted keys are left unmanaged.
+// Usage: c.macos({ spotlightIndexing: false, musicPlayKey: false, clickWallpaperToShowDesktop: false })
+func (m *CrucibleModule) macos(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		panic(m.vm.NewGoError(fmt.Errorf("macos() requires an options object")))
+	}
+
+	opts := call.Arguments[0].ToObject(m.vm)
+
+	d := decl.Declaration{
+		Type: decl.MacOS,
+		MacOSTweaks: decl.MacOSTweaks{
+			SpotlightIndexing:           m.optBoolPtr(opts, "spotlightIndexing"),
+			MusicPlayKey:                m.optBoolPtr(opts, "musicPlayKey"),
+			ClickWallpaperToShowDesktop: m.optBoolPtr(opts, "clickWallpaperToShowDesktop"),
+		},
+	}
+
+	if !d.MacOSTweaks.Any() {
+		panic(m.vm.NewGoError(fmt.Errorf("macos() requires at least one of: spotlightIndexing, musicPlayKey, clickWallpaperToShowDesktop")))
 	}
 
 	*m.declarations = append(*m.declarations, d)
@@ -838,11 +927,22 @@ func (m *CrucibleModule) script(call goja.FunctionCall) goja.Value {
 		panic(m.vm.NewGoError(fmt.Errorf("script() requires a check option")))
 	}
 
+	var sudo bool
+	if v := opts.Get("sudo"); v != nil && !goja.IsUndefined(v) {
+		switch value := v.Export().(type) {
+		case bool:
+			sudo = value
+		default:
+			panic(m.vm.NewGoError(fmt.Errorf("script(): sudo must be a boolean")))
+		}
+	}
+
 	*m.declarations = append(*m.declarations, decl.Declaration{
 		Type:          decl.Script,
 		ScriptName:    name,
 		ScriptInstall: installVal.String(),
 		ScriptCheck:   checkVal.String(),
+		ScriptSudo:    sudo,
 	})
 
 	return goja.Undefined()

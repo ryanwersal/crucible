@@ -16,7 +16,11 @@ func (FileHandler) DeclType() decl.Type { return decl.File }
 func (FileHandler) DeclName() string    { return "File" }
 
 func (FileHandler) Plan(ctx context.Context, store *fact.Store, env Env, d decl.Declaration) (PlanOutput, error) {
-	fileFact, err := fact.Get(ctx, store, "file:"+d.Path, fact.FileCollector{Path: d.Path})
+	factKey := "file:" + d.Path
+	if d.Seed {
+		factKey = "seed-file:" + d.Path
+	}
+	fileFact, err := fact.Get(ctx, store, factKey, fact.FileCollector{Path: d.Path, SkipHash: d.Seed})
 	if err != nil {
 		return PlanOutput{}, err
 	}
@@ -25,6 +29,7 @@ func (FileHandler) Plan(ctx context.Context, store *fact.Store, env Env, d decl.
 		Content: d.Content,
 		Mode:    d.Mode,
 		Absent:  d.State == decl.Absent,
+		Seed:    d.Seed,
 	}, fileFact)
 	if err != nil {
 		return PlanOutput{}, err
@@ -34,6 +39,8 @@ func (FileHandler) Plan(ctx context.Context, store *fact.Store, env Env, d decl.
 		msg := fmt.Sprintf("%s (up to date)", d.Path)
 		if d.State == decl.Absent {
 			msg = fmt.Sprintf("%s (already absent)", d.Path)
+		} else if d.Seed {
+			msg = fmt.Sprintf("%s (seeded)", d.Path)
 		}
 		out.Observations = append(out.Observations, action.Observation{Description: msg})
 	} else {

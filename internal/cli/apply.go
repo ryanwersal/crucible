@@ -74,14 +74,22 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 
 			if dryRun {
 				_, _ = fmt.Fprintf(w, "%d action(s) would be taken.\n", len(result.Actions))
+				if result.RequiresSudo() {
+					_, _ = fmt.Fprintln(w, sudoNotice)
+				}
 				return nil
 			}
 
 			errw := cmd.ErrOrStderr()
+			eng.SetInput(cmd.InOrStdin())
+			eng.SetOutput(w, errw)
 
 			if !yes {
 				_, _ = fmt.Fprintf(errw, "%d action(s) will be taken:\n", len(result.Actions))
 				printActions(errw, result.Actions)
+				if result.RequiresSudo() {
+					_, _ = fmt.Fprintln(errw, sudoNotice)
+				}
 				_, _ = fmt.Fprintf(errw, "Proceed? [y/N] ")
 				ok, err := readConfirmation(cmd.Context(), cmd.InOrStdin(), errw, []string{"y", "yes"})
 				if err != nil {
@@ -120,10 +128,16 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 			// terminal check is the single source of truth for interactivity,
 			// which gates PTY-backed live progress in the engine.
 			var observer engine.ActionObserver
+			var beforeActions func()
 			interactive := false
-			if f, ok := w.(*os.File); ok && ui.IsTerminal(f) {
-				r := ui.NewRenderer(f, len(result.Actions), 5)
-				r.Start(cmd.Context())
+			// chsh runs after package installation and may prompt. Use plain
+			// progress for that run so its terminal interaction stays visible.
+			hasShellChange := slices.ContainsFunc(result.Actions, func(a action.Action) bool {
+				return a.Type == action.SetShell
+			})
+			if f, ok := w.(*os.File); ok && ui.IsTerminal(f) && !hasShellChange {
+				r := ui.NewRenderer(f, result.Actions, 5)
+				beforeActions = func() { r.Start(cmd.Context()) }
 				defer r.Wait() // ensure render loop stops and cursor is restored
 				observer = r
 				interactive = true
@@ -132,9 +146,10 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 			}
 
 			applyResult, err := eng.ApplyResultWithOptions(cmd.Context(), result, engine.ApplyOptions{
-				Concurrency: concurrency,
-				Observer:    observer,
-				Interactive: interactive,
+				Concurrency:   concurrency,
+				Observer:      observer,
+				Interactive:   interactive,
+				BeforeActions: beforeActions,
 			})
 			if err != nil {
 				return err
@@ -162,6 +177,8 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 	cmd.Flags().BoolVar(&noRefresh, "no-refresh", false, "skip `brew update` before computing outdated packages")
 	return cmd
 }
+
+const sudoNotice = "Actions marked [sudo] need administrator privileges; sudo may prompt while these actions run, before the live display starts."
 
 // readConfirmation reads a single line from stdin and reports whether it
 // (case-insensitively, trimmed) matches one of the accepted strings. Returns

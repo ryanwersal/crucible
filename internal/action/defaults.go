@@ -16,10 +16,15 @@ type DesiredDefault struct {
 
 // DiffDefaults compares the desired default value against the current state.
 func DiffDefaults(desired DesiredDefault, actual *fact.DefaultsInfo) []Action {
+	serialGroup := ""
+	if desired.Domain == "com.apple.dock" {
+		serialGroup = "dock"
+	}
 	if desired.Absent {
 		if actual != nil && actual.Exists {
 			return []Action{{
 				Type:           DeleteDefaults,
+				SerialGroup:    serialGroup,
 				DefaultsDomain: desired.Domain,
 				DefaultsKey:    desired.Key,
 				Description:    fmt.Sprintf("defaults delete %s %s", desired.Domain, desired.Key),
@@ -36,6 +41,7 @@ func DiffDefaults(desired DesiredDefault, actual *fact.DefaultsInfo) []Action {
 
 	return []Action{{
 		Type:              SetDefaults,
+		SerialGroup:       serialGroup,
 		DefaultsDomain:    desired.Domain,
 		DefaultsKey:       desired.Key,
 		DefaultsValue:     desired.Value,

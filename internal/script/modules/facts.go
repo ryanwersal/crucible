@@ -3,6 +3,7 @@ package modules
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/dop251/goja"
 
@@ -71,6 +72,20 @@ func (m *FactsModule) homebrewObject() *goja.Object {
 		casks = append(casks, name)
 	}
 	_ = obj.Set("casks", casks)
+
+	taps := &fact.HomebrewTapInfo{}
+	if brewInfo.Available {
+		taps, err = fact.Get(m.ctx, m.store, "homebrew-taps", fact.HomebrewTapCollector{})
+	}
+	if err != nil {
+		panic(m.vm.NewGoError(err))
+	}
+	names := make([]string, 0, len(taps.Taps))
+	for name := range taps.Taps {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	_ = obj.Set("taps", names)
 
 	// outdated[canonical-name] -> { installedVersion, currentVersion, isCask, pinned, autoUpdates }.
 	// The Go-internal Outdated map keys each entry under every alias of the

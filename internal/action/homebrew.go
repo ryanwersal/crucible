@@ -2,6 +2,7 @@ package action
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/ryanwersal/crucible/internal/fact"
@@ -16,6 +17,7 @@ const homebrewSerialGroup = "homebrew"
 // DesiredPackage describes a Homebrew package that should be installed,
 // removed, or kept up to date.
 type DesiredPackage struct {
+	Kind   string // empty (auto), formula, or cask
 	Name   string // may be a tap-qualified name like "owner/tap/formula"
 	Absent bool   // true = ensure the package is not installed
 	Latest bool   // true = ensure installed AND at the current version
@@ -36,13 +38,14 @@ func DiffHomebrew(desired []DesiredPackage, actual *fact.HomebrewInfo) ([]Action
 	noted := make(map[string]bool)
 
 	for _, pkg := range desired {
-		installed := isInstalled(pkg.Name, actual)
+		installed := packageInstalled(pkg, actual)
 
 		if pkg.Absent {
 			if installed {
 				actions = append(actions, Action{
 					Type:        UninstallPackage,
 					PackageName: pkg.Name,
+					PackageKind: pkg.Kind,
 					Description: fmt.Sprintf("brew uninstall %s", pkg.Name),
 					SerialGroup: homebrewSerialGroup,
 				})
@@ -55,6 +58,7 @@ func DiffHomebrew(desired []DesiredPackage, actual *fact.HomebrewInfo) ([]Action
 			actions = append(actions, Action{
 				Type:        InstallPackage,
 				PackageName: pkg.Name,
+				PackageKind: pkg.Kind,
 				Description: fmt.Sprintf("brew install %s", pkg.Name),
 				SerialGroup: homebrewSerialGroup,
 			})
@@ -67,6 +71,14 @@ func DiffHomebrew(desired []DesiredPackage, actual *fact.HomebrewInfo) ([]Action
 		}
 
 		out, isOutdated := lookupOutdated(pkg.Name, actual)
+		if pkg.Kind != "" {
+			if typed, ok := actual.Outdated[pkg.Kind+":"+pkg.Name]; ok {
+				out, isOutdated = typed, true
+			}
+			if isOutdated && out.IsCask != (pkg.Kind == "cask") {
+				isOutdated = false
+			}
+		}
 		if !isOutdated {
 			continue
 		}
@@ -88,6 +100,7 @@ func DiffHomebrew(desired []DesiredPackage, actual *fact.HomebrewInfo) ([]Action
 		actions = append(actions, Action{
 			Type:                    UpgradePackage,
 			PackageName:             pkg.Name,
+			PackageKind:             pkg.Kind,
 			PackageInstalledVersion: out.InstalledVersion,
 			PackageCurrentVersion:   out.CurrentVersion,
 			Description: fmt.Sprintf("brew upgrade %s (%s → %s)",
@@ -131,4 +144,33 @@ func shortName(name string) string {
 		return name[i+1:]
 	}
 	return name
+}
+
+func matchesHomebrewPackage(desired DesiredPackage, installed fact.HomebrewPackage) bool {
+	if desired.Kind != "" && desired.Kind != installed.Kind {
+		return false
+	}
+	if tap := PackageTap(desired.Name); tap != "" && tap != installed.Tap {
+		return false
+	}
+	return slices.Contains(installed.Names, desired.Name) || (PackageTap(desired.Name) != "" && installed.Name == shortName(desired.Name))
+}
+
+func packageInstalled(pkg DesiredPackage, actual *fact.HomebrewInfo) bool {
+	if actual.InstalledPackages != nil {
+		for _, installed := range actual.InstalledPackages {
+			if matchesHomebrewPackage(pkg, installed) {
+				return true
+			}
+		}
+		return false
+	}
+	switch pkg.Kind {
+	case "formula":
+		return actual.Formulae[pkg.Name] || actual.Formulae[shortName(pkg.Name)]
+	case "cask":
+		return actual.Casks[pkg.Name] || actual.Casks[shortName(pkg.Name)]
+	default:
+		return isInstalled(pkg.Name, actual)
+	}
 }

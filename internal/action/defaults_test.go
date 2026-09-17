@@ -96,3 +96,13 @@ func TestDiffDefaults(t *testing.T) {
 		})
 	}
 }
+
+func TestDockDefaultsSerialGroup(t *testing.T) {
+	t.Parallel()
+	for _, absent := range []bool{false, true} {
+		acts := DiffDefaults(DesiredDefault{Domain: "com.apple.dock", Key: "autohide", Value: true, Absent: absent}, &fact.DefaultsInfo{Exists: true, Value: false})
+		if len(acts) != 1 || acts[0].SerialGroup != "dock" {
+			t.Fatalf("Dock defaults must serialize with Dock writes: %+v", acts)
+		}
+	}
+}

@@ -20,6 +20,7 @@ func (PackageHandler) PlanBatch(ctx context.Context, store *fact.Store, env Env,
 	for i, d := range decls {
 		packages[i] = action.DesiredPackage{
 			Name:   d.PackageName,
+			Kind:   d.PackageKind,
 			Absent: d.State == decl.Absent,
 			Latest: d.State == decl.Latest,
 		}
@@ -27,6 +28,13 @@ func (PackageHandler) PlanBatch(ctx context.Context, store *fact.Store, env Env,
 
 	brewFact, err := fact.Get(ctx, store, "homebrew", fact.HomebrewCollector{})
 	if err != nil {
+		return PlanOutput{}, err
+	}
+	all := env.Declarations
+	if all == nil {
+		all = decls
+	}
+	if _, err := validateHomebrewTaps(ctx, store, all, brewFact); err != nil {
 		return PlanOutput{}, err
 	}
 	pkgActions, diffObs, noted, err := action.DiffHomebrew(packages, brewFact)

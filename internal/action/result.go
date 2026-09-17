@@ -14,6 +14,16 @@ type PlanResult struct {
 	Observations []Observation
 }
 
+// RequiresSudo reports whether any planned action needs privilege escalation.
+func (r PlanResult) RequiresSudo() bool {
+	for _, a := range r.Actions {
+		if a.NeedsSudo {
+			return true
+		}
+	}
+	return false
+}
+
 // Destructive returns the subset of planned actions that would irrevocably
 // destroy user content. Apply uses this to gate execution behind an explicit
 // confirmation that lists what will be lost.

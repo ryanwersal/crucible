@@ -15,6 +15,7 @@ type DesiredFile struct {
 	Content []byte
 	Mode    fs.FileMode
 	Absent  bool // true = ensure the file does not exist
+	Seed    bool // true = write only when no regular file exists; existing content is left alone
 }
 
 // DiffFile compares the desired file state against the actual state and returns
@@ -31,13 +32,12 @@ func DiffFile(desired DesiredFile, actual *fact.FileInfo) ([]Action, error) {
 		return nil, nil
 	}
 
-	desiredHash := sha256Hex(desired.Content)
-
 	if actual == nil || !actual.Exists {
 		return []Action{{
 			Type:        WriteFile,
 			Path:        desired.Path,
 			Content:     desired.Content,
+			Seed:        desired.Seed,
 			Mode:        desired.Mode,
 			Description: fmt.Sprintf("write %s (new file)", desired.Path),
 		}}, nil
@@ -49,9 +49,14 @@ func DiffFile(desired DesiredFile, actual *fact.FileInfo) ([]Action, error) {
 
 	var actions []Action
 
+	if desired.Seed && !actual.IsLink {
+		return nil, nil
+	}
+
 	if actual.IsLink {
 		actions = append(actions, Action{
 			Type:        DeletePath,
+			Seed:        desired.Seed,
 			Path:        desired.Path,
 			Description: fmt.Sprintf("remove symlink %s (replacing with file)", desired.Path),
 		})
@@ -59,17 +64,19 @@ func DiffFile(desired DesiredFile, actual *fact.FileInfo) ([]Action, error) {
 			Type:        WriteFile,
 			Path:        desired.Path,
 			Content:     desired.Content,
+			Seed:        desired.Seed,
 			Mode:        desired.Mode,
 			Description: fmt.Sprintf("write %s (was symlink)", desired.Path),
 		})
 		return actions, nil
 	}
 
-	if actual.Hash != desiredHash {
+	if actual.Hash != sha256Hex(desired.Content) {
 		actions = append(actions, Action{
 			Type:        WriteFile,
 			Path:        desired.Path,
 			Content:     desired.Content,
+			Seed:        desired.Seed,
 			Mode:        desired.Mode,
 			Description: fmt.Sprintf("write %s (content changed)", desired.Path),
 		})

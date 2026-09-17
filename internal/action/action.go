@@ -18,6 +18,8 @@ const (
 	SetPermissions
 	DeletePath
 	InstallPackage
+	AddHomebrewTap
+	RemoveHomebrewTap
 	SetDefaults
 	SetDock
 	CloneRepo
@@ -39,6 +41,7 @@ const (
 	DownloadHF
 	InstallVSCodeExtension
 	UninstallVSCodeExtension
+	SetMacOSTweak
 )
 
 var typeNames sync.Map
@@ -63,8 +66,11 @@ type Action struct {
 	Note                    string          // optional advisory rendered as an indented line under the action in plan output
 	Recursive               bool            // DeletePath: use os.RemoveAll instead of os.Remove
 	Content                 []byte          // WriteFile
+	Seed                    bool            // WriteFile/DeletePath: seed creation or symlink migration; preserve existing regular files
 	Mode                    fs.FileMode     // WriteFile, CreateDir, SetPermissions
 	LinkTarget              string          // CreateSymlink
+	PackageKind             string          // empty (auto), formula, or cask
+	TapName                 string          // AddHomebrewTap, RemoveHomebrewTap
 	PackageName             string          // InstallPackage, UninstallPackage, UpgradePackage
 	PackageInstalledVersion string          // UpgradePackage: version currently on disk
 	PackageCurrentVersion   string          // UpgradePackage: version that brew would install
@@ -72,8 +78,12 @@ type Action struct {
 	DefaultsKey             string          // SetDefaults
 	DefaultsValue           any             // SetDefaults
 	DefaultsValueType       string          // SetDefaults
+	DockLayout              bool            // SetDock: apps and folders are written
 	DockApps                []string        // SetDock
 	DockFolders             []DockFolder    // SetDock
+	DockSettings            DockSettings    // SetDock
+	MacOSTweak              MacOSTweak      // SetMacOSTweak: which tweak
+	MacOSTweakEnabled       bool            // SetMacOSTweak: desired state
 	GitURL                  string          // CloneRepo, PullRepo
 	GitBranch               string          // CloneRepo, PullRepo
 	FontSource              string          // InstallFont: source file path

@@ -1032,3 +1032,166 @@ func TestExpandPath(t *testing.T) {
 		}
 	}
 }
+
+func TestMacOS_Tweaks(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.macos({ spotlightIndexing: false, musicPlayKey: false })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(*decls) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(*decls))
+	}
+	d := (*decls)[0]
+	if d.Type != decl.MacOS {
+		t.Errorf("type = %v, want MacOS", d.Type)
+	}
+	if d.MacOSTweaks.SpotlightIndexing == nil || *d.MacOSTweaks.SpotlightIndexing {
+		t.Errorf("spotlightIndexing = %v, want false", d.MacOSTweaks.SpotlightIndexing)
+	}
+	if d.MacOSTweaks.MusicPlayKey == nil || *d.MacOSTweaks.MusicPlayKey {
+		t.Errorf("musicPlayKey = %v, want false", d.MacOSTweaks.MusicPlayKey)
+	}
+	if d.MacOSTweaks.ClickWallpaperToShowDesktop != nil {
+		t.Errorf("clickWallpaperToShowDesktop = %v, want unmanaged", *d.MacOSTweaks.ClickWallpaperToShowDesktop)
+	}
+}
+
+func TestMacOS_NoOptions(t *testing.T) {
+	t.Parallel()
+	vm, _ := setupModule(t)
+
+	_, err := vm.RunString(`c.macos({})`)
+	if err == nil {
+		t.Fatal("expected error for macos() with no tweaks")
+	}
+}
+
+func TestDock_Settings(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.dock({ autohide: true, tileSize: 48, showRecents: false })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d := (*decls)[0]
+	if d.DockLayout {
+		t.Error("expected layout to be unmanaged when apps and folders are omitted")
+	}
+	if d.DockSettings.Autohide == nil || !*d.DockSettings.Autohide {
+		t.Errorf("autohide = %v, want true", d.DockSettings.Autohide)
+	}
+	if d.DockSettings.TileSize != 48 {
+		t.Errorf("tileSize = %d, want 48", d.DockSettings.TileSize)
+	}
+	if d.DockSettings.ShowRecents == nil || *d.DockSettings.ShowRecents {
+		t.Errorf("showRecents = %v, want false", d.DockSettings.ShowRecents)
+	}
+}
+
+func TestDock_LayoutManagedWhenAppsGiven(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.dock({ apps: ["/Applications/Safari.app"] })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d := (*decls)[0]
+	if !d.DockLayout {
+		t.Error("expected layout to be managed when apps are given")
+	}
+	if len(d.DockApps) != 1 {
+		t.Errorf("apps = %v, want one entry", d.DockApps)
+	}
+}
+
+func TestDock_InvalidTileSize(t *testing.T) {
+	t.Parallel()
+	vm, _ := setupModule(t)
+
+	_, err := vm.RunString(`c.dock({ tileSize: 0 })`)
+	if err == nil {
+		t.Fatal("expected error for dock() with non-positive tileSize")
+	}
+}
+
+func TestFile_Seed(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+
+	_, err := vm.RunString(`c.file("~/.config/app/permissions.kdl", { content: "x", seed: true })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d := (*decls)[0]
+	if !d.Seed {
+		t.Error("expected seed to be set")
+	}
+}
+
+func TestFile_SeedWithAbsentRejected(t *testing.T) {
+	t.Parallel()
+	vm, _ := setupModule(t)
+
+	_, err := vm.RunString(`c.file("~/x", { seed: true, state: "absent" })`)
+	if err == nil {
+		t.Fatal("expected error for seed combined with absent")
+	}
+}
+
+func TestNewOptionsRejectInvalidValues(t *testing.T) {
+	t.Parallel()
+	for _, source := range []string{
+		`c.macos({spotlightIndexing: "false"})`,
+		`c.macos({musicPlayKey: 0})`,
+		`c.macos({clickWallpaperToShowDesktop: null})`,
+		`c.dock({autohide: "false"})`,
+		`c.dock({showRecents: []})`,
+		`c.file("~/x", {seed: "false"})`,
+		`c.file("~/x", {seed: "false", state: "absent"})`,
+		`c.dock({tileSize: 48.5})`,
+		`c.dock({tileSize: "48"})`,
+		`c.dock({tileSize: true})`,
+		`c.dock({tileSize: Infinity})`,
+		`c.dock({tileSize: NaN})`,
+		`c.dock({tileSize: 1e30})`,
+		`c.dock({apps: "Safari"})`,
+		`c.dock({apps: [false]})`,
+		`c.dock({folders: {path: "~/Downloads"}})`,
+		`c.dock({folders: [null]})`,
+		`c.dock({folders: [{}]})`,
+		`c.dock({folders: [{path: "~/Downloads", view: "typo"}]})`,
+		`c.dock({folders: [{path: "~/Downloads", display: "typo"}]})`,
+	} {
+		t.Run(source, func(t *testing.T) {
+			t.Parallel()
+			vm, decls := setupModule(t)
+			if _, err := vm.RunString(source); err == nil {
+				t.Fatal("expected invalid options to fail")
+			}
+			if len(*decls) != 0 {
+				t.Fatal("invalid options registered a declaration")
+			}
+		})
+	}
+}
+
+func TestDockFolderDefaults(t *testing.T) {
+	t.Parallel()
+	vm, decls := setupModule(t)
+	if _, err := vm.RunString(`c.dock({folders: [{path: "~/Downloads"}]})`); err != nil {
+		t.Fatal(err)
+	}
+	folder := (*decls)[0].DockFolders[0]
+	if folder.View != "auto" || folder.Display != "stack" {
+		t.Fatalf("unexpected folder defaults: %+v", folder)
+	}
+}

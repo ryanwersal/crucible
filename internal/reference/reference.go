@@ -105,6 +105,11 @@ Options (mutually exclusive content sources):
 - source: string — relative path to a file in the source directory (copied verbatim)
 - template: string, data: object — relative path to a Go template, rendered with data
 - mode: number — file permissions (default: 0o644)
+- seed: boolean — write the file only when the path holds no regular file. An
+  existing file is left alone even if its content differs, and a symlink at the
+  path is replaced with a regular file. Use it for config an app rewrites at
+  runtime, so crucible provides the starting point and the app owns it after.
+  Directories and special files are conflicts; seed cannot be used with state: "absent".
 - check: string — optional gate; shell command run at plan time. If it exits
   non-zero the file is skipped (exit 0 = present). Use it to seed config only
   when the owning app is installed, e.g. check: "test -d /Applications/Cursor.app".
@@ -114,6 +119,7 @@ Examples:
   c.file("~/.gitconfig", { content: "[user]\n  name = Me" })
   c.file("~/.config/fish/config.fish", { source: "fish/config.fish" })
   c.file("~/.config/starship.toml", { template: "starship.toml.tmpl", data: { theme: "dark" } })
+  c.file("~/.cache/zellij/permissions.kdl", { source: "zellij/permissions.kdl", seed: true })
 
 ## c.dir(path, options?)
 
@@ -151,7 +157,16 @@ crucible does not back up overwritten content.
 ## c.brew(packages, options?)
 
 Declare Homebrew packages. Accepts a single string or array of strings.
-Supports tap syntax for third-party formulae (e.g. "user/tap/formula").
+Supports tap syntax for third-party packages (e.g. "user/tap/formula").
+Use c.brew.formula(...) or c.brew.cask(...) with the same arguments to select
+an explicit package kind; c.brew(...) retains Homebrew's automatic selection.
+Package operations never add taps. Declare missing third-party repositories
+with c.brew.tap(...) first, including repositories required by dependencies.
+Core formulae and casks can use Homebrew's API without a local tap checkout.
+Installs/upgrades/uninstalls run through a guarded Homebrew Ruby command API:
+tap creation is blocked, including implicit dependency/rename taps. Unsupported
+Homebrew command APIs fail closed. Automatic dependent upgrades are disabled
+for these commands; manage desired upgrades explicitly with state: "latest".
 
 Options:
 - state: "present" (default) — install if missing
@@ -171,6 +186,23 @@ Examples:
   c.brew("ripgrep")
   c.brew(["ripgrep", "fd", "bat"])
   c.brew("ripgrep", { state: "absent" })
+  c.brew.formula("ripgrep", { state: "latest" })
+  c.brew.cask("jayjay", { state: "absent" })
+
+## c.brew.tap(name, options?)
+
+Manage a Homebrew tap explicitly. name is owner/repository; the homebrew-
+repository prefix is normalized away. Only standard GitHub taps are supported.
+Options: state: "present" (default) or "absent". Conflicting declarations fail.
+Adds run before package operations, removals after them, regardless of script
+order. A tap cannot be removed while it contains installed formulae or casks
+unless those packages are also declared absent. Apply rechecks installed
+packages before untapping and never forces removal of remaining packages.
+Unmanaged taps are left alone; deleting their last package does not untap them.
+
+Examples:
+  c.brew.tap("ryanwersal/tools")
+  c.brew.tap("hewigovens/tap", { state: "absent" })
   c.brew(["ripgrep", "fd"], { state: "latest" })
 
 ## c.defaults(domain, key, value) / c.defaults(domain, object)
@@ -186,17 +218,24 @@ Examples:
 
 ## c.dock(options)
 
-Declare the macOS Dock layout.
+Declare the macOS Dock layout and behavior. Omitted options are left
+unmanaged. The layout (apps and folders) is managed as a unit whenever
+either apps or folders is given.
 
 Options:
 - apps: string[] — ordered list of application paths
-- folders: object[] — each with path, view ("grid"|"list"|"fan"|"auto"), display ("folder"|"stack")
+- folders: object[] — each with path, view ("grid"|"list"|"fan"|"auto", default "auto"),
+  display ("folder"|"stack", default "stack")
+- autohide: boolean — hide the Dock until the pointer reaches the screen edge
+- tileSize: number — positive integer icon size in points
+- showRecents: boolean — show recently used apps in the Dock
 
-Example:
+Examples:
   c.dock({
     apps: ["/Applications/Safari.app", "/Applications/Terminal.app"],
     folders: [{ path: "~/Downloads", view: "grid", display: "folder" }]
   })
+  c.dock({ autohide: true, tileSize: 48, showRecents: false })
 
 ## c.git(path, options)
 
@@ -330,6 +369,32 @@ Examples:
   c.display({ resolution: "1800x1169", hz: 120 })
   c.display({ sidebarIconSize: "small", menuBarSpacing: "compact", resolution: "1800x1169", hz: 120 })
 
+## c.macos(options)
+
+Declare macOS system tweaks. Each option is a named tweak with a boolean
+state. Omitted tweaks are left unmanaged. One action is planned per tweak
+that differs from the current system state.
+
+Options:
+- spotlightIndexing: boolean — Spotlight indexing on mounted volumes with
+  metadata stores (mdutil), excluding APFS Time Machine backup volumes. Backup
+  volumes are identified by their APFS Backup role; macOS requires their
+  indexing to remain enabled. Exclusions are shown in the plan. Crucible
+  applies and verifies only the managed volumes, using explicit volume paths.
+  Changing it requires sudo; the plan marks the action [sudo] and crucible
+  runs privileged actions before the live progress display, letting sudo prompt
+  for the command itself. Password reuse follows the system's sudo policy;
+  crucible does not require credential caching.
+- musicPlayKey: boolean — whether the play key launches Music.app. Disabling
+  it unloads and disables the com.apple.rcd launch agent for the current user.
+  This affects media-key handling generally, including other media apps.
+- clickWallpaperToShowDesktop: boolean — whether clicking the wallpaper
+  reveals the desktop (com.apple.WindowManager EnableStandardClickToShowDesktop)
+
+Examples:
+  c.macos({ spotlightIndexing: false })
+  c.macos({ spotlightIndexing: false, musicPlayKey: false, clickWallpaperToShowDesktop: false })
+
 ## c.vscode(extensions, options?)
 
 Manage VS Code extensions by publisher.name ID. Accepts a string or array of
@@ -359,10 +424,15 @@ whether the tool is already installed (exit code 0 = installed).
 Options:
 - install: string — shell command to install the tool (required)
 - check: string — shell command to check if installed (required, exit 0 = installed)
+- sudo: boolean — run install with sudo (default false). The check still runs
+  unprivileged. Privileged actions run after plan approval and before the live
+  apply display; authentication happens on the original terminal. Do not embed
+  sudo in the install command: use this option so the planner can identify it.
 
 Examples:
   c.script("claude-code", { install: "curl -fsSL https://cli.claude.ai/install.sh | sh", check: "claude --version" })
   c.script("rustup", { install: "curl -fsSL https://sh.rustup.rs | sh -s -- -y", check: "rustup --version" })
+  c.script("remove-app", { install: "mas uninstall 668208984", check: "test ! -d '/Applications/GIPHY Capture.app'", sudo: true })
 
 ## c.log(message)
 
@@ -400,6 +470,7 @@ Pre-collected Homebrew state object:
 - available: boolean — whether brew is installed
 - formulae: string[] — installed formula names
 - casks: string[] — installed cask names
+- taps: string[] — currently checked-out taps (core/cask API access is not a tap)
 - outdated: object — map keyed by canonical package name (one entry per
   outdated package, regardless of how many aliases it has) →
   { name, installedVersion, currentVersion, isCask, pinned, autoUpdates }.
@@ -481,9 +552,10 @@ var declTypeDescriptions = map[decl.Type]string{
 	decl.File:            "Managed file — created or updated with specified content, source, or template",
 	decl.Dir:             "Managed directory — created with specified permissions",
 	decl.Symlink:         "Managed symlink — points to a target path",
+	decl.HomebrewTap:     "Homebrew repository — explicitly tapped or untapped",
 	decl.Package:         "Homebrew package — installed or uninstalled via brew",
 	decl.Defaults:        "macOS defaults key — set or deleted in a preference domain",
-	decl.Dock:            "macOS Dock layout — apps and folders in the Dock",
+	decl.Dock:            "macOS Dock — apps, folders, autohide, tile size, and recents",
 	decl.GitRepo:         "Git repository — cloned or updated at a path",
 	decl.Font:            "Font file — installed to the fonts directory",
 	decl.MiseTool:        "Mise tool — globally installed version manager tool",
@@ -495,6 +567,7 @@ var declTypeDescriptions = map[decl.Type]string{
 	decl.Script:          "Script-installed tool — installed via a shell command, checked by a command's exit code",
 	decl.OllamaModel:     "Ollama model — pulled or removed from the local Ollama model store",
 	decl.HFDownload:      "HuggingFace download — repo files fetched into a local directory via the hf CLI",
+	decl.MacOS:           "macOS tweaks — named system settings such as Spotlight indexing, play-key behavior, and desktop click",
 }
 
 func writeDeclTypes(b *strings.Builder, reg *resource.Registry) {
@@ -517,10 +590,12 @@ var actionTypeDescriptions = map[action.Type]string{
 	action.CreateSymlink:            "Create or update a symlink",
 	action.SetPermissions:           "Set file or directory permissions",
 	action.DeletePath:               "Remove a file, directory, or symlink",
+	action.AddHomebrewTap:           "Add an explicitly declared Homebrew tap",
+	action.RemoveHomebrewTap:        "Remove an empty Homebrew tap after package removals",
 	action.InstallPackage:           "Install a Homebrew package",
 	action.UpgradePackage:           "Upgrade an installed Homebrew package to the current version",
 	action.SetDefaults:              "Write a macOS defaults key",
-	action.SetDock:                  "Set the macOS Dock layout",
+	action.SetDock:                  "Write the macOS Dock layout and settings, then restart the Dock",
 	action.CloneRepo:                "Clone a git repository",
 	action.PullRepo:                 "Pull updates in an existing git repository",
 	action.InstallFont:              "Install a font file",
@@ -539,6 +614,7 @@ var actionTypeDescriptions = map[action.Type]string{
 	action.PullOllamaModel:          "Pull an Ollama model via ollama pull",
 	action.RemoveOllamaModel:        "Remove an Ollama model via ollama rm",
 	action.DownloadHF:               "Download a HuggingFace repo into a local directory via hf download",
+	action.SetMacOSTweak:            "Apply one macOS tweak via mdutil, launchctl, or defaults",
 }
 
 func writeActionTypes(b *strings.Builder, reg *resource.Registry) {

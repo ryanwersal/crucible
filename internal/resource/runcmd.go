@@ -63,6 +63,10 @@ func (e *CommandError) Unwrap() error { return e.Err }
 // the captured output tail. Context cancellation is surfaced as the raw exec
 // error so callers can detect it via errors.Is(err, context.Canceled).
 func runCmd(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	return runCmdEnv(ctx, a, stdin, stdout, stderr, nil, name, args...)
+}
+
+func runCmdEnv(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer, env []string, name string, args ...string) error {
 	// Actions that opt into a PTY (large downloads) get a pseudo-terminal so the
 	// underlying tool emits its rich live progress. The engine only leaves PTY
 	// set in interactive mode; in CI/piped/log mode it clears the flag so the
@@ -71,9 +75,10 @@ func runCmd(ctx context.Context, a action.Action, stdin io.Reader, stdout, stder
 	//
 	// Only stdout is forwarded: a PTY merges stdout and stderr into one stream,
 	// so the single writer captures both (every PTY caller passes the same
-	// writer for both anyway).
-	if a.PTY {
-		return runCmdPTY(ctx, a, stdout, name, args...)
+	// writer for both anyway). Privileged commands retain the original terminal
+	// because a new PTY would select a different sudo timestamp record.
+	if a.PTY && !a.NeedsSudo {
+		return runCmdPTYEnv(ctx, a, stdout, env, name, args...)
 	}
 
 	capture := newRingBuffer(maxCapturedOutputBytes)
@@ -90,6 +95,7 @@ func runCmd(ctx context.Context, a action.Action, stdin io.Reader, stdout, stder
 	}
 
 	cmd := buildCmd(ctx, a, stdin, stdoutW, stderrW, name, args...)
+	cmd.Env = env
 
 	err := cmd.Run()
 	if err == nil {
@@ -116,10 +122,15 @@ func runCmd(ctx context.Context, a action.Action, stdin io.Reader, stdout, stder
 // observer) and a bounded capture buffer for error messages — mirroring runCmd's
 // CommandError contract.
 func runCmdPTY(ctx context.Context, a action.Action, out io.Writer, name string, args ...string) error {
+	return runCmdPTYEnv(ctx, a, out, nil, name, args...)
+}
+
+func runCmdPTYEnv(ctx context.Context, a action.Action, out io.Writer, env []string, name string, args ...string) error {
 	capture := newRingBuffer(maxCapturedOutputBytes)
 
 	// Leave Stdin/Stdout/Stderr unset so pty.Start wires them to the tty.
 	cmd := buildCmd(ctx, a, nil, nil, nil, name, args...)
+	cmd.Env = env
 
 	ptmx, err := pty.Start(cmd)
 	if err != nil {

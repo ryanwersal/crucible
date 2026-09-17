@@ -177,9 +177,11 @@ func newDefaultRegistry() *Registry {
 	r.RegisterHandler(DisplayHandler{})
 	r.RegisterHandler(ScriptHandler{})
 	r.RegisterHandler(HFDownloadHandler{})
+	r.RegisterHandler(MacOSHandler{})
 
 	// Batch handlers
 	r.RegisterBatchHandler(PackageHandler{})
+	r.RegisterBatchHandler(HomebrewTapHandler{})
 	r.RegisterBatchHandler(FontHandler{})
 	r.RegisterBatchHandler(MiseToolHandler{Resolver: fact.MiseResolver{}})
 	r.RegisterBatchHandler(MasHandler{})
@@ -193,6 +195,8 @@ func newDefaultRegistry() *Registry {
 	r.RegisterExecutor(SetPermissionsExecutor{})
 	r.RegisterExecutor(DeletePathExecutor{})
 	r.RegisterExecutor(InstallPackageExecutor{})
+	r.RegisterExecutor(AddHomebrewTapExecutor{})
+	r.RegisterExecutor(RemoveHomebrewTapExecutor{})
 	r.RegisterExecutor(UninstallPackageExecutor{})
 	r.RegisterExecutor(UpgradePackageExecutor{})
 	r.RegisterExecutor(SetDefaultsExecutor{})
@@ -217,6 +221,7 @@ func newDefaultRegistry() *Registry {
 	r.RegisterExecutor(PullOllamaModelExecutor{server: ollamaSrv})
 	r.RegisterExecutor(RemoveOllamaModelExecutor{server: ollamaSrv})
 	r.RegisterExecutor(DownloadHFExecutor{})
+	r.RegisterExecutor(SetMacOSTweakExecutor{})
 
 	return r
 }

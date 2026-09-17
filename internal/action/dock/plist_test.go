@@ -106,7 +106,8 @@ func TestReadWrite_RoundTrip(t *testing.T) {
 	}
 	newApps := []string{"/System/Applications/Utilities/Terminal.app"}
 	newFolders := []FolderEntry{{Path: homeDir, View: "list", Display: "stack"}}
-	if err := Write(plistPath, newApps, newFolders); err != nil {
+	showRecents := false
+	if err := Write(plistPath, &Layout{Apps: newApps, Folders: newFolders}, Settings{TileSize: 48, ShowRecents: &showRecents}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -126,6 +127,15 @@ func TestReadWrite_RoundTrip(t *testing.T) {
 	}
 	if state2.Folders[0].View != "list" {
 		t.Fatalf("expected list view, got %q", state2.Folders[0].View)
+	}
+	if state2.Settings.Autohide == nil || !*state2.Settings.Autohide {
+		t.Fatal("expected autohide to be preserved as true")
+	}
+	if state2.Settings.TileSize != 48 {
+		t.Fatalf("expected tile size 48, got %d", state2.Settings.TileSize)
+	}
+	if state2.Settings.ShowRecents == nil || *state2.Settings.ShowRecents {
+		t.Fatal("expected show-recents to be written as false")
 	}
 
 	// Verify other settings preserved
@@ -209,5 +219,64 @@ func TestDisplayConversions(t *testing.T) {
 		if got != d {
 			t.Errorf("roundtrip %q → %q", d, got)
 		}
+	}
+}
+
+func TestFileURLRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	path := "/System/Applications/System Settings.app"
+	encoded := fileURL(path)
+	if encoded != "file:///System/Applications/System%20Settings.app/" {
+		t.Fatalf("fileURL = %q", encoded)
+	}
+	if got := pathFromFileURL(encoded); got != path {
+		t.Fatalf("pathFromFileURL = %q, want %q", got, path)
+	}
+}
+
+func TestWrite_SettingsOnlyPreservesLayout(t *testing.T) {
+	t.Parallel()
+
+	root := map[string]any{
+		"autohide": false,
+		"persistent-apps": []any{
+			map[string]any{
+				"tile-data": map[string]any{
+					"file-data": map[string]any{
+						"_CFURLString":     "file:///Applications/Safari.app/",
+						"_CFURLStringType": uint64(15),
+					},
+				},
+				"tile-type": "file-tile",
+			},
+		},
+	}
+	data, err := plist.Marshal(root, plist.XMLFormat)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	plistPath := filepath.Join(t.TempDir(), "com.apple.dock.plist")
+	if err := os.WriteFile(plistPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Write(plistPath, nil, Settings{Autohide: new(true), TileSize: 48}); err != nil {
+		t.Fatal(err)
+	}
+
+	state, err := Read(plistPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Apps) != 1 || state.Apps[0] != "/Applications/Safari.app" {
+		t.Fatalf("layout not preserved: %v", state.Apps)
+	}
+	if state.Settings.Autohide == nil || !*state.Settings.Autohide {
+		t.Fatal("autohide not written")
+	}
+	if state.Settings.TileSize != 48 {
+		t.Fatalf("tile size = %d, want 48", state.Settings.TileSize)
 	}
 }

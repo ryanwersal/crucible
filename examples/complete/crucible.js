@@ -34,6 +34,7 @@ if (c.facts.os.name === "darwin") {
         c.brew(["visual-studio-code", "alacritty", "firefox", "chromium", "docker", "sublime-merge"]);
 
         // Custom tap
+        c.brew.tap("ryanwersal/tools");
         c.brew("ryanwersal/tools/helios");
     }
 

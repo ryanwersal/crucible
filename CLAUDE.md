@@ -11,6 +11,11 @@ Go CLI tool targeting Go 1.26. See `docs/implementation/` for detailed coding st
 - Use `errors.Is()` and `errors.AsType[E]()` for error checking, never `==` or type assertions.
 - Factory functions for cobra commands, not global `init()`.
 - Business logic in `internal/runner/` (or domain packages) must be independent of CLI and TUI layers.
+- Separate logical blocks (conditionals, loops, function calls with setup) with blank lines.
+
+## Commit messages
+
+Keep commit messages succinct. Describe what changed and why, never how.
 
 ## Adding or modifying resources
 

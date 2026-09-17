@@ -181,7 +181,7 @@ const c = require("crucible");
 // Conditional logic — the whole point of scripting
 if (c.facts.os.name === "darwin") {
     c.brew("coreutils");
-    c.brew("firefox", { type: "cask" });
+    c.brew.cask("firefox");
 }
 
 // Files — inline content via JS template literals

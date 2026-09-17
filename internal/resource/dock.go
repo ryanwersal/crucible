@@ -28,13 +28,19 @@ func (DockHandler) Plan(ctx context.Context, store *fact.Store, env Env, d decl.
 		}
 	}
 	acts := action.DiffDock(action.DesiredDock{
+		Layout:  d.DockLayout,
 		Apps:    d.DockApps,
 		Folders: desiredFolders,
+		Settings: action.DockSettings{
+			Autohide:    d.DockSettings.Autohide,
+			TileSize:    d.DockSettings.TileSize,
+			ShowRecents: d.DockSettings.ShowRecents,
+		},
 	}, dockFact)
 	var out PlanOutput
 	if len(acts) == 0 {
 		out.Observations = append(out.Observations, action.Observation{
-			Description: "dock layout (up to date)",
+			Description: "dock (up to date)",
 		})
 	} else {
 		out.Actions = acts

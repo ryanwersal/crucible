@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -77,5 +79,31 @@ func TestFileCollector_Symlink(t *testing.T) {
 	}
 	if !info.IsLink {
 		t.Fatal("expected IsLink=true")
+	}
+}
+
+func TestFileCollector_RejectsFIFO(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "fifo")
+	if err := syscall.Mkfifo(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (FileCollector{Path: path}).Collect(t.Context()); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("expected special-file conflict, got %v", err)
+	}
+}
+
+func TestFileCollectorSkipHash(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "seed")
+	if err := os.WriteFile(path, []byte("app state"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	info, err := (FileCollector{Path: path, SkipHash: true}).Collect(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Exists || info.Hash != "" || info.IsDir || info.IsLink {
+		t.Fatalf("unexpected metadata: %+v", info)
 	}
 }

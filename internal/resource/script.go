@@ -23,6 +23,7 @@ func (ScriptHandler) Plan(ctx context.Context, store *fact.Store, env Env, d dec
 	acts := action.DiffScript(action.DesiredScript{
 		Name:    d.ScriptName,
 		Install: d.ScriptInstall,
+		Sudo:    d.ScriptSudo,
 	}, scriptFact)
 	var out PlanOutput
 	if len(acts) == 0 {

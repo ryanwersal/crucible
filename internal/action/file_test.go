@@ -25,6 +25,33 @@ func TestDiffFile(t *testing.T) {
 			wantType:    WriteFile,
 		},
 		{
+			name:        "seed writes when missing",
+			desired:     DesiredFile{Path: "/tmp/test.txt", Content: []byte("hello"), Mode: 0o644, Seed: true},
+			actual:      &fact.FileInfo{Exists: false},
+			wantActions: 1,
+			wantType:    WriteFile,
+		},
+		{
+			name:    "seed leaves differing content alone",
+			desired: DesiredFile{Path: "/tmp/test.txt", Content: []byte("hello"), Mode: 0o644, Seed: true},
+			actual: &fact.FileInfo{
+				Exists: true,
+				Hash:   sha256Hex([]byte("edited by app")),
+				Mode:   0o600,
+			},
+			wantActions: 0,
+		},
+		{
+			name:    "seed replaces symlink",
+			desired: DesiredFile{Path: "/tmp/test.txt", Content: []byte("hello"), Mode: 0o644, Seed: true},
+			actual: &fact.FileInfo{
+				Exists: true,
+				IsLink: true,
+			},
+			wantActions: 2,
+			wantType:    DeletePath,
+		},
+		{
 			name:    "no change",
 			desired: DesiredFile{Path: "/tmp/test.txt", Content: []byte("hello"), Mode: 0o644},
 			actual: &fact.FileInfo{

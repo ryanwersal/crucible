@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -25,7 +26,8 @@ type FileInfo struct {
 
 // FileCollector collects facts about a file at Path.
 type FileCollector struct {
-	Path string
+	Path     string
+	SkipHash bool // Observe metadata only, for seed files whose contents are unmanaged.
 }
 
 func (f FileCollector) Collect(_ context.Context) (*FileInfo, error) {
@@ -51,6 +53,12 @@ func (f FileCollector) Collect(_ context.Context) (*FileInfo, error) {
 	}
 
 	if !fi.IsDir && !fi.IsLink {
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("path conflict: %s is not a regular file", f.Path)
+		}
+		if f.SkipHash {
+			return fi, nil
+		}
 		h, err := hashFile(f.Path)
 		if err != nil {
 			return nil, err

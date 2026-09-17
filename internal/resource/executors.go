@@ -21,7 +21,7 @@ import (
 // buildCmd creates an exec.Cmd, prepending sudo when a.NeedsSudo is true.
 func buildCmd(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer, name string, args ...string) *exec.Cmd {
 	if a.NeedsSudo {
-		args = append([]string{name}, args...)
+		args = append([]string{"-p", "crucible needs administrator privileges. Password: ", "--", name}, args...)
 		name = "sudo"
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
@@ -62,6 +62,28 @@ func (WriteFileExecutor) Execute(_ context.Context, a action.Action, _ io.Reader
 	if err := os.Chmod(tmpName, a.Mode); err != nil {
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("chmod temp file: %w", err)
+	}
+	if a.Seed {
+		// Linking publishes the complete file atomically without replacing a
+		// file that the application created after planning.
+		linkErr := os.Link(tmpName, a.Path)
+		if err := os.Remove(tmpName); err != nil {
+			return fmt.Errorf("remove seed temp file: %w", err)
+		}
+		if errors.Is(linkErr, fs.ErrExist) {
+			info, err := os.Lstat(a.Path)
+			if err != nil {
+				return fmt.Errorf("inspect existing seed file: %w", err)
+			}
+			if !info.Mode().IsRegular() {
+				return fmt.Errorf("path conflict: %s is not a regular file", a.Path)
+			}
+			return nil
+		}
+		if linkErr != nil {
+			return fmt.Errorf("create seed file: %w", linkErr)
+		}
+		return nil
 	}
 	if err := os.Rename(tmpName, a.Path); err != nil {
 		_ = os.Remove(tmpName)
@@ -113,7 +135,7 @@ func (InstallPackageExecutor) ActionType() action.Type { return action.InstallPa
 func (InstallPackageExecutor) ActionName() string      { return "InstallPackage" }
 
 func (InstallPackageExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
-	return runCmd(ctx, a, stdin, stdout, stderr, "brew", "install", a.PackageName)
+	return runHomebrewPackage(ctx, a, stdin, stdout, stderr, "install")
 }
 
 // UninstallPackageExecutor removes a Homebrew package.
@@ -123,7 +145,7 @@ func (UninstallPackageExecutor) ActionType() action.Type { return action.Uninsta
 func (UninstallPackageExecutor) ActionName() string      { return "UninstallPackage" }
 
 func (UninstallPackageExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
-	return runCmd(ctx, a, stdin, stdout, stderr, "brew", "uninstall", a.PackageName)
+	return runHomebrewPackage(ctx, a, stdin, stdout, stderr, "uninstall")
 }
 
 // UpgradePackageExecutor upgrades an installed Homebrew package to its
@@ -135,7 +157,7 @@ func (UpgradePackageExecutor) ActionType() action.Type { return action.UpgradePa
 func (UpgradePackageExecutor) ActionName() string      { return "UpgradePackage" }
 
 func (UpgradePackageExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
-	return runCmd(ctx, a, stdin, stdout, stderr, "brew", "upgrade", a.PackageName)
+	return runHomebrewPackage(ctx, a, stdin, stdout, stderr, "upgrade")
 }
 
 // SetDefaultsExecutor writes a macOS defaults value.
@@ -193,18 +215,29 @@ func (SetDockExecutor) Execute(ctx context.Context, a action.Action, _ io.Reader
 	}
 	plistPath := filepath.Join(homeDir, "Library", "Preferences", "com.apple.dock.plist")
 
-	folders := make([]dock.FolderEntry, len(a.DockFolders))
-	for i, f := range a.DockFolders {
-		folders[i] = dock.FolderEntry{
-			Path:    f.Path,
-			View:    f.View,
-			Display: f.Display,
+	var layout *dock.Layout
+	if a.DockLayout {
+		folders := make([]dock.FolderEntry, len(a.DockFolders))
+		for i, f := range a.DockFolders {
+			folders[i] = dock.FolderEntry{
+				Path:    f.Path,
+				View:    f.View,
+				Display: f.Display,
+			}
 		}
+		layout = &dock.Layout{Apps: a.DockApps, Folders: folders}
 	}
 
-	if err := dock.Write(plistPath, a.DockApps, folders); err != nil {
+	settings := dock.Settings{
+		Autohide:    a.DockSettings.Autohide,
+		TileSize:    a.DockSettings.TileSize,
+		ShowRecents: a.DockSettings.ShowRecents,
+	}
+
+	if err := dock.Write(plistPath, layout, settings); err != nil {
 		return err
 	}
+
 	return dock.RestartDock(ctx)
 }
 

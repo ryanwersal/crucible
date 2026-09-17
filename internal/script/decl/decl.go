@@ -38,6 +38,8 @@ const (
 	OllamaModel
 	HFDownload
 	VSCodeExtension
+	MacOS
+	HomebrewTap
 )
 
 var typeNames sync.Map
@@ -64,13 +66,18 @@ type Declaration struct {
 	TemplateFile           string          // File: relative path to .tmpl in source dir
 	TemplateData           map[string]any  // File: template variables
 	Mode                   fs.FileMode     // File, Dir
+	Seed                   bool            // File: write only when the path holds no regular file; existing content is left alone
 	LinkTarget             string          // Symlink
+	PackageKind            string          // empty (auto), formula, or cask
+	TapName                string          // HomebrewTap
 	PackageName            string          // Package
 	DefaultsDomain         string          // Defaults
 	DefaultsKey            string          // Defaults
 	DefaultsValue          any             // Defaults
+	DockLayout             bool            // Dock: apps and folders are managed
 	DockApps               []string        // Dock
 	DockFolders            []DockFolder    // Dock
+	DockSettings           DockSettings    // Dock
 	GitURL                 string          // GitRepo
 	GitBranch              string          // GitRepo
 	FontSource             string          // Font: relative path to font file in source dir
@@ -90,6 +97,7 @@ type Declaration struct {
 	ScriptName             string          // Script: human-readable tool name
 	ScriptInstall          string          // Script: shell command to install
 	ScriptCheck            string          // Script: shell command to check if installed (exit 0 = installed)
+	ScriptSudo             bool            // Script: run install with privilege escalation
 	OllamaModel            string          // OllamaModel: model reference, e.g. "llama3.1:8b" or "hf.co/user/repo:Q4_K_M"
 	VSCodeExtension        string
 	HFRepo                 string   // HFDownload: HuggingFace repo id, e.g. "user/repo"
@@ -97,6 +105,7 @@ type Declaration struct {
 	HFInclude              []string // HFDownload: optional --include globs
 	HFExclude              []string // HFDownload: optional --exclude globs
 	HFRevision             string   // HFDownload: optional git revision/branch/tag
+	MacOSTweaks            MacOSTweaks
 }
 
 // AllTypes returns every registered declaration Type, sorted by ordinal.
@@ -181,6 +190,27 @@ func ValidSidebarIconSizes() []string {
 // ValidMenuBarSpacing reports whether name is a recognized menu bar spacing mode.
 func ValidMenuBarSpacing(name string) bool {
 	return name == "compact" || name == "default"
+}
+
+// DockSettings holds optional Dock behavior settings. Nil pointers and zero
+// values leave the corresponding setting unmanaged.
+type DockSettings struct {
+	Autohide    *bool
+	TileSize    int
+	ShowRecents *bool
+}
+
+// MacOSTweaks holds optional macOS system tweaks. Nil pointers leave the
+// corresponding tweak unmanaged.
+type MacOSTweaks struct {
+	SpotlightIndexing           *bool
+	MusicPlayKey                *bool
+	ClickWallpaperToShowDesktop *bool
+}
+
+// Any reports whether at least one tweak is declared.
+func (t MacOSTweaks) Any() bool {
+	return t.SpotlightIndexing != nil || t.MusicPlayKey != nil || t.ClickWallpaperToShowDesktop != nil
 }
 
 // DockFolder describes a folder entry in the Dock declaration.

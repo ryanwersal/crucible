@@ -14,11 +14,13 @@ func TestDiffDock(t *testing.T) {
 		desired     DesiredDock
 		actual      *fact.DockInfo
 		wantActions int
+		wantDesc    string
 	}{
 		{
 			name: "nil actual",
 			desired: DesiredDock{
-				Apps: []string{"/Applications/Safari.app"},
+				Layout: true,
+				Apps:   []string{"/Applications/Safari.app"},
 			},
 			actual:      nil,
 			wantActions: 1,
@@ -26,7 +28,8 @@ func TestDiffDock(t *testing.T) {
 		{
 			name: "apps match",
 			desired: DesiredDock{
-				Apps: []string{"/Applications/Safari.app", "/Applications/Firefox.app"},
+				Layout: true,
+				Apps:   []string{"/Applications/Safari.app", "/Applications/Firefox.app"},
 			},
 			actual: &fact.DockInfo{
 				Apps: []string{"/Applications/Safari.app", "/Applications/Firefox.app"},
@@ -36,7 +39,8 @@ func TestDiffDock(t *testing.T) {
 		{
 			name: "apps differ",
 			desired: DesiredDock{
-				Apps: []string{"/Applications/Safari.app"},
+				Layout: true,
+				Apps:   []string{"/Applications/Safari.app"},
 			},
 			actual: &fact.DockInfo{
 				Apps: []string{"/Applications/Firefox.app"},
@@ -46,7 +50,8 @@ func TestDiffDock(t *testing.T) {
 		{
 			name: "apps order matters",
 			desired: DesiredDock{
-				Apps: []string{"/Applications/Safari.app", "/Applications/Firefox.app"},
+				Layout: true,
+				Apps:   []string{"/Applications/Safari.app", "/Applications/Firefox.app"},
 			},
 			actual: &fact.DockInfo{
 				Apps: []string{"/Applications/Firefox.app", "/Applications/Safari.app"},
@@ -56,6 +61,7 @@ func TestDiffDock(t *testing.T) {
 		{
 			name: "folders match",
 			desired: DesiredDock{
+				Layout:  true,
 				Apps:    []string{"/Applications/Safari.app"},
 				Folders: []DockFolder{{Path: "/Users/test/Downloads", View: "grid", Display: "folder"}},
 			},
@@ -66,8 +72,54 @@ func TestDiffDock(t *testing.T) {
 			wantActions: 0,
 		},
 		{
+			name: "settings only, layout untouched",
+			desired: DesiredDock{
+				Settings: DockSettings{Autohide: new(true), TileSize: 48},
+			},
+			actual: &fact.DockInfo{
+				Apps:     []string{"/Applications/Firefox.app"},
+				Autohide: new(true),
+				TileSize: 48,
+			},
+			wantActions: 0,
+		},
+		{
+			name: "autohide differs",
+			desired: DesiredDock{
+				Settings: DockSettings{Autohide: new(true)},
+			},
+			actual:      &fact.DockInfo{Autohide: new(false)},
+			wantActions: 1,
+		},
+		{
+			name: "autohide key absent",
+			desired: DesiredDock{
+				Settings: DockSettings{Autohide: new(false)},
+			},
+			actual:      &fact.DockInfo{},
+			wantActions: 1,
+		},
+		{
+			name: "tile size differs",
+			desired: DesiredDock{
+				Settings: DockSettings{TileSize: 48},
+			},
+			actual:      &fact.DockInfo{TileSize: 36},
+			wantActions: 1,
+			wantDesc:    "set dock: tile size → 48",
+		},
+		{
+			name: "show recents differs",
+			desired: DesiredDock{
+				Settings: DockSettings{ShowRecents: new(false)},
+			},
+			actual:      &fact.DockInfo{ShowRecents: new(true)},
+			wantActions: 1,
+		},
+		{
 			name: "folders differ",
 			desired: DesiredDock{
+				Layout:  true,
 				Apps:    []string{"/Applications/Safari.app"},
 				Folders: []DockFolder{{Path: "/Users/test/Downloads", View: "grid", Display: "folder"}},
 			},
@@ -88,6 +140,12 @@ func TestDiffDock(t *testing.T) {
 			}
 			if tt.wantActions > 0 && actions[0].Type != SetDock {
 				t.Fatalf("expected SetDock, got %s", actions[0].Type)
+			}
+			if len(actions) > 0 && actions[0].SerialGroup != "dock" {
+				t.Fatal("Dock writes must share a serial group")
+			}
+			if tt.wantDesc != "" && actions[0].Description != tt.wantDesc {
+				t.Fatalf("description = %q, want %q", actions[0].Description, tt.wantDesc)
 			}
 		})
 	}

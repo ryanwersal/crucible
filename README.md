@@ -12,7 +12,7 @@ const c = require("crucible");
 
 if (c.facts.os.name === "darwin") {
     c.brew("ripgrep");
-    c.brew("firefox", { type: "cask" });
+    c.brew.cask("firefox");
 }
 
 c.file("~/.gitconfig", {

@@ -18,12 +18,21 @@ import (
 // This mirrors the SerialGroup mechanism that Homebrew *actions* already use.
 var brewMu sync.Mutex
 
+// HomebrewPackage retains package kind and origin for safe tap removal.
+type HomebrewPackage struct {
+	Name  string
+	Tap   string
+	Kind  string
+	Names []string
+}
+
 // HomebrewInfo holds the observed state of Homebrew packages.
 type HomebrewInfo struct {
-	Available bool                       // is `brew` on PATH?
-	Formulae  map[string]bool            // installed formula names, plus aliases/oldnames/full_name
-	Casks     map[string]bool            // installed cask tokens, plus old_tokens/full_token
-	Outdated  map[string]OutdatedPackage // outdated packages, keyed by every name in Formulae/Casks
+	InstalledPackages []HomebrewPackage
+	Available         bool                       // is `brew` on PATH?
+	Formulae          map[string]bool            // installed formula names, plus aliases/oldnames/full_name
+	Casks             map[string]bool            // installed cask tokens, plus old_tokens/full_token
+	Outdated          map[string]OutdatedPackage // outdated packages, keyed by every name in Formulae/Casks
 }
 
 // OutdatedPackage describes a single package that has a newer version available.
@@ -126,12 +135,14 @@ type installContext struct {
 func parseHomebrewInfo(data []byte) (*HomebrewInfo, *installContext, error) {
 	var raw struct {
 		Formulae []struct {
+			Tap      string   `json:"tap"`
 			Name     string   `json:"name"`
 			FullName string   `json:"full_name"`
 			Aliases  []string `json:"aliases"`
 			Oldnames []string `json:"oldnames"`
 		} `json:"formulae"`
 		Casks []struct {
+			Tap         string   `json:"tap"`
 			Token       string   `json:"token"`
 			FullToken   string   `json:"full_token"`
 			OldTokens   []string `json:"old_tokens"`
@@ -142,6 +153,7 @@ func parseHomebrewInfo(data []byte) (*HomebrewInfo, *installContext, error) {
 		return nil, nil, fmt.Errorf("parse brew info: %w", err)
 	}
 
+	var installedPackages []HomebrewPackage
 	formulae := make(map[string]bool)
 	casks := make(map[string]bool)
 	aliases := make(map[string][]string)
@@ -149,25 +161,35 @@ func parseHomebrewInfo(data []byte) (*HomebrewInfo, *installContext, error) {
 
 	for _, f := range raw.Formulae {
 		names := collectNames(f.Name, f.FullName, f.Aliases, f.Oldnames)
+		if f.Tap != "" {
+			names = append(names, strings.ToLower(f.Tap)+"/"+f.Name)
+		}
+		installedPackages = append(installedPackages, HomebrewPackage{Name: f.Name, Tap: strings.ToLower(f.Tap), Kind: "formula", Names: names})
 		for _, n := range names {
 			formulae[n] = true
 		}
 		if f.Name != "" {
 			aliases[f.Name] = names
+			aliases["formula:"+f.Name] = names
 		}
 	}
 	for _, c := range raw.Casks {
 		names := collectNames(c.Token, c.FullToken, nil, c.OldTokens)
+		if c.Tap != "" {
+			names = append(names, strings.ToLower(c.Tap)+"/"+c.Token)
+		}
+		installedPackages = append(installedPackages, HomebrewPackage{Name: c.Token, Tap: strings.ToLower(c.Tap), Kind: "cask", Names: names})
 		for _, n := range names {
 			casks[n] = true
 		}
 		if c.Token != "" {
 			aliases[c.Token] = names
+			aliases["cask:"+c.Token] = names
 			caskAutoUpdates[c.Token] = c.AutoUpdates
 		}
 	}
 
-	return &HomebrewInfo{Formulae: formulae, Casks: casks},
+	return &HomebrewInfo{InstalledPackages: installedPackages, Formulae: formulae, Casks: casks},
 		&installContext{aliases: aliases, caskAutoUpdates: caskAutoUpdates},
 		nil
 }
@@ -232,6 +254,9 @@ func parseHomebrewOutdated(data []byte, ctx *installContext) (map[string]Outdate
 			Pinned:           f.Pinned,
 		}
 		recordOutdated(out, f.Name, pkg, ctx.aliases)
+		for _, name := range ctx.aliases["formula:"+f.Name] {
+			out["formula:"+name] = pkg
+		}
 	}
 	for _, c := range raw.Casks {
 		installed := ""
@@ -246,6 +271,9 @@ func parseHomebrewOutdated(data []byte, ctx *installContext) (map[string]Outdate
 			AutoUpdates:      ctx.caskAutoUpdates[c.Name],
 		}
 		recordOutdated(out, c.Name, pkg, ctx.aliases)
+		for _, name := range ctx.aliases["cask:"+c.Name] {
+			out["cask:"+name] = pkg
+		}
 	}
 
 	return out, nil

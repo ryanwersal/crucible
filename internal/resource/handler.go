@@ -11,8 +11,9 @@ import (
 
 // Env carries directory paths needed by handlers during planning.
 type Env struct {
-	SourceDir string
-	TargetDir string
+	Declarations []decl.Declaration // cross-resource validation (e.g. taps and packages)
+	SourceDir    string
+	TargetDir    string
 }
 
 // PlanOutput holds the actions and observations produced by a handler.

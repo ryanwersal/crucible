@@ -52,11 +52,15 @@ type Renderer struct {
 }
 
 // NewRenderer creates a renderer that writes to the given terminal.
-// total is the number of actions that will be observed.
-func NewRenderer(w *os.File, total int, maxLines int) *Renderer {
+// actions initializes the pending rows before execution begins.
+func NewRenderer(w *os.File, actions []action.Action, maxLines int) *Renderer {
+	states := make([]actionState, len(actions))
+	for i, a := range actions {
+		states[i].action = a
+	}
 	return &Renderer{
 		w:         w,
-		actions:   make([]actionState, total),
+		actions:   states,
 		maxLines:  maxLines,
 		termWidth: terminalWidth(w),
 		done:      make(chan struct{}),

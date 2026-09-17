@@ -65,9 +65,9 @@ func TestBuildContainsAllJSAPIFunctions(t *testing.T) {
 	// function must be documented in the reference so a script author — human
 	// or coding agent — can discover the full surface from one command.
 	jsFuncs := []string{
-		"file", "dir", "symlink", "brew", "defaults", "dock",
+		"file", "dir", "symlink", "brew", "brew.tap", "brew.cask", "brew.formula", "defaults", "dock",
 		"git", "font", "mas", "mise", "ollama", "hf", "shell",
-		"keyRemap", "display", "script", "log", "vscode",
+		"keyRemap", "display", "macos", "script", "log", "vscode",
 	}
 	for _, name := range jsFuncs {
 		target := "c." + name + "("
