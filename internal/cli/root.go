@@ -51,6 +51,7 @@ containing a crucible.js script.`,
 	cmd.AddCommand(newApplyCmd(opts))
 	cmd.AddCommand(newReferenceCmd())
 	cmd.AddCommand(newVersionCmd())
+	cmd.AddCommand(newFilterCertBundleCmd())
 
 	return cmd
 }

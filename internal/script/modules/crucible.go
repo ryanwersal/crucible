@@ -59,6 +59,7 @@ func (m *CrucibleModule) Export(facts *FactsModule) *goja.Object {
 	_ = obj.Set("display", m.display)
 	_ = obj.Set("macos", m.macos)
 	_ = obj.Set("script", m.script)
+	_ = obj.Set("certBundle", m.certBundle)
 	_ = obj.Set("log", m.log)
 	if facts != nil {
 		_ = obj.Set("facts", facts.Export())

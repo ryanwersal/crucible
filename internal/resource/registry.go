@@ -167,6 +167,7 @@ func newDefaultRegistry() *Registry {
 
 	// Per-declaration handlers
 	r.RegisterHandler(FileHandler{})
+	r.RegisterHandler(CertBundleHandler{})
 	r.RegisterHandler(DirHandler{})
 	r.RegisterHandler(SymlinkHandler{})
 	r.RegisterHandler(DefaultsHandler{})
@@ -190,6 +191,7 @@ func newDefaultRegistry() *Registry {
 
 	// Action executors
 	r.RegisterExecutor(WriteFileExecutor{})
+	r.RegisterExecutor(FilterCertBundleExecutor{})
 	r.RegisterExecutor(CreateDirExecutor{})
 	r.RegisterExecutor(CreateSymlinkExecutor{})
 	r.RegisterExecutor(SetPermissionsExecutor{})

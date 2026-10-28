@@ -418,6 +418,32 @@ Examples:
   c.vscode(["esbenp.prettier-vscode", "dbaeumer.vscode-eslint"])
   c.vscode("publisher.extension", { state: "absent" })
 
+## c.certBundle(path, options)
+
+Remove exact certificates from an existing PEM bundle, retaining all other bytes.
+Path must be absolute or start with ~/. This resource manages absence only;
+it does not replace the vendor bundle or modify the macOS Keychain.
+
+Options:
+- absent: nonempty string[] — SHA-256 fingerprints of DER certificates. Hex is
+  case-insensitive; colon separators are accepted. Names are never matched.
+- sudo: boolean — elevate only the bundle update (default false).
+
+Planning parses every certificate. Missing, empty, malformed, non-regular, or
+symlink bundles are errors. Plans list each removal's subject and fingerprint.
+Apply rejects changed snapshots, preserves permissions and ownership, retains a
+backup named <path>.crucible-backup-<SHA256-of-original-file>, and atomically
+replaces and verifies the bundle. Removing every certificate is refused.
+Unrelated text is retained, including human-readable descriptions of removed
+certificates; inspect the PEM blocks rather than grepping names to verify absence.
+Reapplying detects certificates restored by vendor updates. Backups are never
+restored automatically. This only covers tools using the declared bundle.
+Do not declare the same path with another resource. The bundle's parent directory
+must be trusted; concurrent external writers should be stopped during apply.
+
+Example (fingerprints supplied by your reviewed incident policy):
+  c.certBundle("/etc/ssl/cert.pem", { absent: incident.rootFingerprints, sudo: true })
+
 ## c.script(name, options)
 
 Declare a tool installed via a shell command. The check command determines
@@ -551,6 +577,7 @@ func writeTemplateData(b *strings.Builder) {
 }
 
 var declTypeDescriptions = map[decl.Type]string{
+	decl.CertBundle:      "PEM certificate bundle — exact denied certificates kept absent",
 	decl.File:            "Managed file — created or updated with specified content, source, or template",
 	decl.Dir:             "Managed directory — created with specified permissions",
 	decl.Symlink:         "Managed symlink — points to a target path",
@@ -587,6 +614,7 @@ func writeDeclTypes(b *strings.Builder, reg *resource.Registry) {
 }
 
 var actionTypeDescriptions = map[action.Type]string{
+	action.FilterCertBundle:         "Remove denied certificates with snapshot validation, backup, and atomic replacement",
 	action.WriteFile:                "Write or update a file's content",
 	action.CreateDir:                "Create a directory",
 	action.CreateSymlink:            "Create or update a symlink",

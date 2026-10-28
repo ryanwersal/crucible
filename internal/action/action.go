@@ -42,6 +42,7 @@ const (
 	InstallVSCodeExtension
 	UninstallVSCodeExtension
 	SetMacOSTweak
+	FilterCertBundle
 )
 
 var typeNames sync.Map
@@ -59,6 +60,8 @@ func (t Type) String() string {
 
 // Action is an inert description of a change to apply.
 type Action struct {
+	CertAbsent              []string
+	CertSnapshot            string
 	Type                    Type
 	Group                   string // resource group for display; set by engine from decl type (e.g. "File", "Package")
 	Path                    string

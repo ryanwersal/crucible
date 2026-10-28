@@ -40,6 +40,7 @@ const (
 	VSCodeExtension
 	MacOS
 	HomebrewTap
+	CertBundle
 )
 
 var typeNames sync.Map
@@ -57,6 +58,8 @@ func (t Type) String() string {
 
 // Declaration represents a single desired-state entry produced by a script.
 type Declaration struct {
+	CertAbsent             []string // CertBundle: exact SHA-256 certificate fingerprints
+	CertSudo               bool
 	Type                   Type
 	State                  State
 	Check                  string          // optional gate: shell command; non-zero exit skips this declaration (exit 0 = present)
