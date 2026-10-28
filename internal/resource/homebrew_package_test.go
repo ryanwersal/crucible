@@ -1,10 +1,12 @@
 package resource
 
 import (
+	"encoding/json"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -34,6 +36,8 @@ func TestHomebrewPackageGuard(t *testing.T) {
  def install(*); File.write(ENV.fetch("MUTATED_TAP"),name); end
 end
 `)
+	// Homebrew's bundled Ruby does not provide the optional base64 gem.
+	write("base64.rb", `raise LoadError, "cannot load such file -- base64"`)
 	write("abstract_command.rb", `require "json"
 module Homebrew
  class << self; attr_accessor :running_command; end
@@ -76,6 +80,7 @@ esac
 		{name: "formula", op: "install", kind: "formula", packageName: "owner/tools/app"},
 		{name: "cask", op: "install", kind: "cask", packageName: "owner/tools/app"},
 		{name: "upgrade", op: "upgrade", kind: "cask", packageName: "owner/tools/app"},
+		{name: "uninstall", op: "uninstall", packageName: "app"},
 		{name: "dependency tap blocked", op: "install", kind: "formula", packageName: "app", implicit: "dependency/tools", wantErr: true},
 		{name: "cask dependency tap blocked", op: "install", kind: "cask", packageName: "app", implicit: "dependency/tools", wantErr: true},
 		{name: "official checkout blocked", op: "upgrade", packageName: "app", implicit: "homebrew/core", wantErr: true},
@@ -98,8 +103,16 @@ esac
 				if err != nil {
 					t.Fatal(err)
 				}
-				if tc.kind != "" && !strings.Contains(string(args), "--"+tc.kind) {
-					t.Fatalf("missing type selector: %s", args)
+				var got []string
+				if err := json.Unmarshal(args, &got); err != nil {
+					t.Fatal(err)
+				}
+				want := []string{"--", tc.packageName}
+				if tc.kind != "" {
+					want = append([]string{"--" + tc.kind}, want...)
+				}
+				if !slices.Equal(got, want) {
+					t.Fatalf("arguments=%q want %q", got, want)
 				}
 			}
 		})
@@ -137,5 +150,31 @@ esac
 	data, err := os.ReadFile(log)
 	if err != nil || string(data) != "owner/tools\n" {
 		t.Fatalf("data=%s err=%v", data, err)
+	}
+}
+
+func TestHomebrewPackageEnv(t *testing.T) {
+	keys := []string{"HOMEBREW_NO_AUTO_UPDATE", "HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK", "HOMEBREW_NO_INSTALL_CLEANUP", "HOMEBREW_NO_ENV_HINTS"}
+	for _, key := range keys {
+		t.Setenv(key, "0")
+	}
+	t.Setenv("CRUCIBLE_ENV_TEST", "preserved")
+	env := homebrewPackageEnv()
+	for _, key := range keys {
+		count := 0
+		for _, item := range env {
+			if strings.HasPrefix(item, key+"=") {
+				count++
+				if item != key+"=1" {
+					t.Errorf("unexpected override: %s", item)
+				}
+			}
+		}
+		if count != 1 {
+			t.Errorf("%s occurs %d times", key, count)
+		}
+	}
+	if !slices.Contains(env, "CRUCIBLE_ENV_TEST=preserved") {
+		t.Fatal("lost unrelated environment")
 	}
 }

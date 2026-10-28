@@ -98,3 +98,18 @@ func TestLogObserver_SuccessLogsInfo(t *testing.T) {
 		t.Errorf("expected 'action completed' message, got: %q", got)
 	}
 }
+
+func TestLogObserverDoesNotDuplicateCapturedOutput(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	o := NewLogObserver(slog.New(slog.NewTextHandler(&buf, nil)))
+	o.ActionCompleted(0, action.Action{}, &tailErr{msg: "exit status 1\nunique failure detail", tail: "unique failure detail"})
+	if strings.Count(buf.String(), "unique failure detail") != 1 {
+		t.Fatalf("duplicated output: %s", buf.String())
+	}
+	buf.Reset()
+	o.ActionCompleted(0, action.Action{}, errors.New("first line\nimportant second line"))
+	if !strings.Contains(buf.String(), "important second line") {
+		t.Fatal("lost ordinary error detail")
+	}
+}

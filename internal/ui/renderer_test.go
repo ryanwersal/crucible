@@ -177,3 +177,67 @@ func TestTruncate(t *testing.T) {
 		})
 	}
 }
+
+func TestProgressKeepsLargePlansCompact(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	r := &Renderer{w: &buf, termWidth: 80, actions: make([]actionState, 100), maxLines: 5}
+	for i := range r.actions {
+		r.actions[i] = actionState{action: action.Action{Description: "completed package"}, status: statusDone}
+	}
+	r.ActionStarted(99, action.Action{Description: "remaining package"})
+	r.ActionOutput(99, "noisy download progress")
+	r.renderProgress()
+	got := buf.String()
+	if strings.Contains(got, "completed package") || strings.Contains(got, "noisy") {
+		t.Fatalf("noisy frame: %q", got)
+	}
+	if !strings.Contains(got, "remaining package") || !strings.Contains(got, "99/100 complete") {
+		t.Fatalf("missing progress: %q", got)
+	}
+	if strings.Count(got, "\n") != 2 {
+		t.Fatalf("expected compact frame: %q", got)
+	}
+}
+
+func TestFinalFailurePreservesFullCapturedError(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	r := &Renderer{w: &buf, termWidth: 20, actions: make([]actionState, 1), maxLines: 5}
+	a := action.Action{Description: "brew upgrade example"}
+	r.ActionStarted(0, a)
+	for range 10 {
+		r.ActionOutput(0, "cleanup noise")
+	}
+	detail := "cannot load a required file: " + strings.Repeat("x", 100)
+	r.ActionCompleted(0, a, &tailErr{msg: "exit status 1", tail: "\x1b[31m" + detail + "\x1b[0m\n\tfrom command\n"})
+	r.renderProgress()
+	buf.Reset()
+	r.render()
+	got := buf.String()
+	if !strings.Contains(got, detail) {
+		t.Fatalf("lost error: %q", got)
+	}
+	if strings.Contains(got, "\t") || strings.Contains(got, "\x1b[31m") {
+		t.Fatalf("unsafe terminal output: %q", got)
+	}
+	if r.lastLineCount != 0 {
+		t.Fatal("final report should never be redrawn")
+	}
+}
+
+func TestProgressBoundsManyRunningActions(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	r := &Renderer{w: &buf, termWidth: 80, actions: make([]actionState, 100)}
+	for i := range r.actions {
+		r.ActionStarted(i, action.Action{Description: "running"})
+	}
+	r.renderProgress()
+	if strings.Count(buf.String(), "\n") >= 24 {
+		t.Fatal("frame exceeds terminal height")
+	}
+	if !strings.Contains(buf.String(), "100 running") {
+		t.Fatal("missing running count")
+	}
+}

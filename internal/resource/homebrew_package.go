@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/ryanwersal/crucible/internal/action"
@@ -37,8 +38,9 @@ func runHomebrewPackage(ctx context.Context, a action.Action, stdin io.Reader, s
 		return err
 	}
 	// Encode data separately from Ruby source: package names cannot inject code.
-	code := homebrewPackageGuard + "\nrequire 'base64'; require 'json'; CrucibleHomebrewPackage.run(" +
-		fmt.Sprintf("%q", operation) + ", JSON.parse(Base64.strict_decode64(\"" + base64.StdEncoding.EncodeToString(encoded) + "\")))\n"
+	// Use Ruby's built-in decoder: Homebrew does not bundle the base64 gem.
+	code := homebrewPackageGuard + "\nrequire 'json'; CrucibleHomebrewPackage.run(" +
+		fmt.Sprintf("%q", operation) + ", JSON.parse(\"" + base64.StdEncoding.EncodeToString(encoded) + "\".unpack1('m0')))\n"
 	// Don't let Homebrew's shell launcher update/migrate taps before our guard
 	// loads. Explicit refresh remains a separate planning step.
 	err = runCmdEnv(ctx, a, stdin, stdout, stderr, homebrewPackageEnv(), "brew", "ruby", "-e", code)
@@ -52,12 +54,17 @@ func runHomebrewPackage(ctx context.Context, a action.Action, stdin io.Reader, s
 }
 
 func homebrewPackageEnv() []string {
-	env := make([]string, 0, len(os.Environ())+2)
+	overrides := []string{"HOMEBREW_NO_AUTO_UPDATE", "HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK", "HOMEBREW_NO_INSTALL_CLEANUP", "HOMEBREW_NO_ENV_HINTS"}
+	env := make([]string, 0, len(os.Environ())+len(overrides))
 	for _, item := range os.Environ() {
-		if strings.HasPrefix(item, "HOMEBREW_NO_AUTO_UPDATE=") || strings.HasPrefix(item, "HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=") {
+		key, _, _ := strings.Cut(item, "=")
+		if slices.Contains(overrides, key) {
 			continue
 		}
 		env = append(env, item)
 	}
-	return append(env, "HOMEBREW_NO_AUTO_UPDATE=1", "HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1")
+	for _, key := range overrides {
+		env = append(env, key+"=1")
+	}
+	return env
 }

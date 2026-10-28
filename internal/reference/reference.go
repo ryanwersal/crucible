@@ -165,7 +165,9 @@ with c.brew.tap(...) first, including repositories required by dependencies.
 Core formulae and casks can use Homebrew's API without a local tap checkout.
 Installs/upgrades/uninstalls run through a guarded Homebrew Ruby command API:
 tap creation is blocked, including implicit dependency/rename taps. Unsupported
-Homebrew command APIs fail closed. Automatic dependent upgrades are disabled
+Homebrew command APIs fail closed. Automatic cleanup and environment hints are
+disabled during package operations; run brew cleanup separately for maintenance.
+Automatic dependent upgrades are disabled
 for these commands; manage desired upgrades explicitly with state: "latest".
 
 Options:

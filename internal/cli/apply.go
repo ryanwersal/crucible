@@ -163,9 +163,6 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 				return nil
 			}
 			_, _ = fmt.Fprintf(w, "%d action(s) applied, %d failed.\n", succeeded, len(errs))
-			for _, e := range errs {
-				_, _ = fmt.Fprintf(w, "  ✗ %s: %v\n", e.Action.Description, e.Err)
-			}
 			return fmt.Errorf("%d action(s) failed", len(errs))
 		},
 	}

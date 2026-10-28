@@ -44,6 +44,7 @@ func (o *LogObserver) ActionCompleted(_ int, a action.Action, err error) {
 	attrs = append(attrs, "action", a.Type.String(), "description", a.Description, "err", err)
 	if carrier, ok := errors.AsType[outputCarrier](err); ok {
 		if tail := carrier.OutputTail(); tail != "" {
+			attrs[len(attrs)-1] = firstLine(err.Error())
 			attrs = append(attrs, "output", tail)
 		}
 	}

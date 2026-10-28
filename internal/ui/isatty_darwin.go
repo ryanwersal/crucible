@@ -40,3 +40,13 @@ func terminalWidth(f *os.File) int {
 	}
 	return int(ws.Col)
 }
+
+// terminalHeight returns the terminal height, or 24 when unavailable.
+func terminalHeight(f *os.File) int {
+	var ws struct{ Row, Col, Xpixel, Ypixel uint16 }
+	_, _, err := syscall.Syscall6(syscall.SYS_IOCTL, f.Fd(), syscall.TIOCGWINSZ, uintptr(unsafe.Pointer(&ws)), 0, 0, 0)
+	if err != 0 || ws.Row == 0 {
+		return 24
+	}
+	return int(ws.Row)
+}
