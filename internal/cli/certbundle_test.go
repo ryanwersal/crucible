@@ -78,7 +78,7 @@ func TestCertBundleCLIPlanApply(t *testing.T) {
 		t.Fatal("apply did not filter bundle")
 	}
 	out, _, verify := testCmdDirs(dir, t.TempDir())
-	if err := verify("apply", "--dry-run"); err != nil {
+	if err := verify("apply", "--dry-run", "--show-plan"); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "denied certificates absent") || !strings.Contains(out.String(), "Everything up to date") {

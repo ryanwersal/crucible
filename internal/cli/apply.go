@@ -65,8 +65,11 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 			if err != nil {
 				return err
 			}
-			if showPlan || dryRun {
+			if showPlan {
 				printResult(w, result)
+				_, _ = fmt.Fprintln(w)
+			} else if len(result.Actions) > 0 {
+				printActions(w, result.Actions)
 				_, _ = fmt.Fprintln(w)
 			}
 
@@ -170,7 +173,7 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 	}
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be done without making changes")
-	cmd.Flags().BoolVar(&showPlan, "show-plan", false, "show the detailed plan before applying (always shown with --dry-run)")
+	cmd.Flags().BoolVar(&showPlan, "show-plan", false, "include unchanged resources in the plan")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompt")
 	cmd.Flags().StringVarP(&scriptFile, "file", "f", "", "path to a crucible.js script (default: ./crucible.js)")
 	cmd.Flags().IntVar(&concurrency, "concurrency", 4, "max parallel actions (1 for sequential)")

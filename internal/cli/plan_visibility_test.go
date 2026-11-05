@@ -16,7 +16,8 @@ func TestApplyPlanVisibility(t *testing.T) {
 	}{
 		{name: "default", prompt: true},
 		{name: "show plan", flags: []string{"--show-plan"}, details: true, prompt: true},
-		{name: "dry run", flags: []string{"--dry-run"}, details: true},
+		{name: "dry run", flags: []string{"--dry-run"}},
+		{name: "dry run with plan", flags: []string{"--dry-run", "--show-plan"}, details: true},
 		{name: "yes", flags: []string{"--yes"}, apply: true},
 		{name: "yes with plan", flags: []string{"--yes", "--show-plan"}, details: true, apply: true},
 	} {
@@ -34,11 +35,13 @@ func TestApplyPlanVisibility(t *testing.T) {
 			if err := run(append([]string{"apply"}, tc.flags...)...); err != nil {
 				t.Fatal(err)
 			}
-			for _, name := range []string{"new-file", "existing-file"} {
-				if strings.Contains(out.String(), name) != tc.details {
-					t.Fatalf("unexpected plan visibility: %s", out)
-				}
+			if strings.Count(out.String(), "new-file") != 1 {
+				t.Fatalf("pending action must appear exactly once: %s", out)
 			}
+			if strings.Contains(out.String(), "existing-file") != tc.details {
+				t.Fatalf("unexpected unchanged-resource visibility: %s", out)
+			}
+
 			if strings.Contains(errout.String(), "new-file") {
 				t.Fatalf("duplicate action tree: %s", errout)
 			}
@@ -85,7 +88,7 @@ func TestApplyQuietPreservesDestructiveConfirmation(t *testing.T) {
 	if err := run("apply", "--yes"); err != nil {
 		t.Fatal(err)
 	}
-	if out.Len() != 0 || !strings.Contains(errout.String(), "Type \"yes\" to confirm destruction") || !strings.Contains(errout.String(), path) {
+	if !strings.Contains(out.String(), path) || !strings.Contains(errout.String(), "Type \"yes\" to confirm destruction") || !strings.Contains(errout.String(), path) {
 		t.Fatalf("missing destructive confirmation: %q %q", out, errout)
 	}
 	content, err := os.ReadFile(path)

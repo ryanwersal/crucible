@@ -33,8 +33,8 @@ crucible apply             # apply changes
 crucible apply --show-plan  # show the detailed plan, then apply changes
 ```
 
-Normal applies hide the detailed plan and keep confirmation and progress output.
-Use `--show-plan` to include it; `--dry-run` always shows the plan without applying.
+Applies and dry runs show pending actions by default, without listing unchanged resources.
+Use `--show-plan` to include unchanged resources; `--dry-run` previews without applying.
 Destructive operations still show their details and require explicit confirmation.
 
 Source is always the current directory. Target is always `$HOME`. No script? The current
