@@ -106,7 +106,7 @@ func DiffHomebrewTaps(desired []DesiredHomebrewTap, actual *fact.HomebrewTapInfo
 		case tap.Absent && installed:
 			actions = append(actions, Action{Type: RemoveHomebrewTap, TapName: tap.Name, SerialGroup: homebrewSerialGroup, Description: "brew untap " + tap.Name})
 		case !tap.Absent && !installed:
-			actions = append(actions, Action{Type: AddHomebrewTap, TapName: tap.Name, SerialGroup: homebrewSerialGroup, Description: "brew tap " + tap.Name})
+			actions = append(actions, Action{Type: AddHomebrewTap, TapName: tap.Name, SerialGroup: homebrewSerialGroup, Description: "brew trust --tap " + tap.Name + " && brew tap " + tap.Name})
 		default:
 			state := "tapped"
 			if tap.Absent {

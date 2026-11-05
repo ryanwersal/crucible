@@ -63,7 +63,15 @@ type AddHomebrewTapExecutor struct{}
 func (AddHomebrewTapExecutor) ActionType() action.Type { return action.AddHomebrewTap }
 func (AddHomebrewTapExecutor) ActionName() string      { return "AddHomebrewTap" }
 func (AddHomebrewTapExecutor) Execute(ctx context.Context, a action.Action, stdin io.Reader, stdout, stderr io.Writer) error {
-	return runCmd(ctx, a, stdin, stdout, stderr, "brew", "tap", a.TapName)
+	// Trust first so a failure cannot leave a newly installed tap that the next
+	// plan would consider complete without granting the requested trust.
+	if err := runCmd(ctx, a, stdin, stdout, stderr, "brew", "trust", "--tap", a.TapName); err != nil {
+		return fmt.Errorf("trust Homebrew tap %s: %w", a.TapName, err)
+	}
+	if err := runCmd(ctx, a, stdin, stdout, stderr, "brew", "tap", a.TapName); err != nil {
+		return fmt.Errorf("add Homebrew tap %s: %w", a.TapName, err)
+	}
+	return nil
 }
 
 type RemoveHomebrewTapExecutor struct{}

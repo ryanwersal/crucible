@@ -196,6 +196,10 @@ Examples:
 Manage a Homebrew tap explicitly. name is owner/repository; the homebrew-
 repository prefix is normalized away. Only standard GitHub taps are supported.
 Options: state: "present" (default) or "absent". Conflicting declarations fail.
+Adding a missing tap first runs brew trust --tap, then brew tap. Declaring a
+new tap authorizes trusting its formulae, casks, and commands. This requires
+Homebrew with the trust command; trust failures stop the addition. Existing
+taps are left as-is; their trust state is not reconciled.
 Adds run before package operations, removals after them, regardless of script
 order. A tap cannot be removed while it contains installed formulae or casks
 unless those packages are also declared absent. Apply rechecks installed
@@ -624,7 +628,7 @@ var actionTypeDescriptions = map[action.Type]string{
 	action.CreateSymlink:            "Create or update a symlink",
 	action.SetPermissions:           "Set file or directory permissions",
 	action.DeletePath:               "Remove a file, directory, or symlink",
-	action.AddHomebrewTap:           "Add an explicitly declared Homebrew tap",
+	action.AddHomebrewTap:           "Trust and add an explicitly declared Homebrew tap",
 	action.RemoveHomebrewTap:        "Remove an empty Homebrew tap after package removals",
 	action.InstallPackage:           "Install a Homebrew package",
 	action.UpgradePackage:           "Upgrade an installed Homebrew package to the current version",
