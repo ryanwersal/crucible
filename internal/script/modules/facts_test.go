@@ -102,7 +102,8 @@ func TestFacts_Dir(t *testing.T) {
 
 func TestFacts_Homebrew(t *testing.T) {
 	t.Parallel()
-	vm, _ := setupFactsModule(t)
+	vm, store := setupFactsModule(t)
+	fact.Set(store, "homebrew", &fact.HomebrewInfo{Available: false})
 
 	// Just verify the property exists and is a boolean (don't depend on brew being installed)
 	v, err := vm.RunString(`typeof facts.homebrew.available`)

@@ -15,10 +15,11 @@ type Collector[T any] interface {
 // entry holds a in-flight or completed collection for a single key.
 // seeded entries (via Set) skip the collector path entirely.
 type entry struct {
-	once   sync.Once
-	val    any
-	err    error
-	seeded bool // true when val came from Set; Get must not invoke the collector
+	once    sync.Once
+	val     any
+	err     error
+	seeded  bool // true when val came from Set; Get must not invoke the collector
+	collect func(context.Context) (any, error)
 }
 
 // Store caches collected facts for the duration of a plan phase.
@@ -42,6 +43,17 @@ func Set[T any](s *Store, key string, val T) {
 	s.entries[key] = &entry{val: val, seeded: true}
 }
 
+// SetCollector configures collection on first Get, without collecting now.
+// Existing entries (including seeded test facts) take precedence. Configure
+// collectors before consumers start requesting facts.
+func SetCollector[T any](s *Store, key string, c Collector[T]) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.entries[key]; !exists {
+		s.entries[key] = &entry{collect: func(ctx context.Context) (any, error) { return c.Collect(ctx) }}
+	}
+}
+
 // Get retrieves a cached fact or collects it exactly once per key.
 // Concurrent calls for the same key block until the first collection completes.
 func Get[T any](ctx context.Context, s *Store, key string, c Collector[T]) (T, error) {
@@ -55,7 +67,11 @@ func Get[T any](ctx context.Context, s *Store, key string, c Collector[T]) (T, e
 
 	if !e.seeded {
 		e.once.Do(func() {
-			e.val, e.err = c.Collect(ctx)
+			if e.collect != nil {
+				e.val, e.err = e.collect(ctx)
+			} else {
+				e.val, e.err = c.Collect(ctx)
+			}
 		})
 	}
 

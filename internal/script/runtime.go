@@ -28,7 +28,7 @@ type Runtime struct {
 }
 
 // NewRuntime creates a script runtime with native modules registered.
-// The provided store should already have expensive facts pre-collected.
+// The provided store shares cached and deferred facts across the plan.
 func NewRuntime(ctx context.Context, logger *slog.Logger, sourceDir, targetDir string, store *fact.Store) *Runtime {
 	vm := goja.New()
 	vm.SetFieldNameMapper(goja.UncapFieldNameMapper())

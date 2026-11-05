@@ -5,6 +5,8 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+
+	"golang.org/x/sync/errgroup"
 )
 
 type countCollector struct {
@@ -123,5 +125,66 @@ func TestSet_TypeMismatchPropagates(t *testing.T) {
 	_, err := Get(context.Background(), store, "stub", intCollector{})
 	if err == nil {
 		t.Fatal("expected type mismatch error")
+	}
+}
+
+func TestSetCollectorDefersAndSharesCollection(t *testing.T) {
+	t.Parallel()
+	store := NewStore()
+	configured := &countCollector{val: "configured"}
+	fallback := &countCollector{val: "fallback"}
+	SetCollector(store, "test", configured)
+	if configured.calls.Load() != 0 {
+		t.Fatal("registration collected facts")
+	}
+	var group errgroup.Group
+	group.SetLimit(8)
+	for range 16 {
+		group.Go(func() error {
+			value, err := Get(context.Background(), store, "test", fallback)
+			if err != nil {
+				return err
+			}
+			if value != "configured" {
+				return errors.New("configured collector ignored")
+			}
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if configured.calls.Load() != 1 || fallback.calls.Load() != 0 {
+		t.Fatal("collection was not shared")
+	}
+}
+
+func TestSetCollectorPreservesExistingEntries(t *testing.T) {
+	t.Parallel()
+	for _, seeded := range []bool{true, false} {
+		store := NewStore()
+		if seeded {
+			Set(store, "test", "existing")
+		} else {
+			if _, err := Get(context.Background(), store, "test", &countCollector{val: "existing"}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		SetCollector(store, "test", fatalCollector{t})
+		value, err := Get(context.Background(), store, "test", fatalCollector{t})
+		if err != nil || value != "existing" {
+			t.Fatalf("existing entry lost: %q %v", value, err)
+		}
+	}
+}
+
+func TestSetCollectorCachesErrors(t *testing.T) {
+	t.Parallel()
+	store := NewStore()
+	SetCollector(store, "test", errCollector{})
+	for range 2 {
+		if _, err := Get(context.Background(), store, "test", fatalCollector{t}); err == nil {
+			t.Fatal("collection failure was hidden")
+		}
 	}
 }

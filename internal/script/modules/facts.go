@@ -11,15 +11,14 @@ import (
 )
 
 // FactsModule exposes system facts to JavaScript as c.facts.
-// OS and homebrew facts are pre-collected; file and dir facts are
-// collected on demand.
+// Homebrew, file, and directory facts are collected on demand.
 type FactsModule struct {
 	vm    *goja.Runtime
 	ctx   context.Context
 	store *fact.Store
 }
 
-// NewFactsModule creates the facts module with a pre-populated store.
+// NewFactsModule creates the facts module with a shared plan fact store.
 func NewFactsModule(vm *goja.Runtime, ctx context.Context, store *fact.Store) *FactsModule {
 	return &FactsModule{vm: vm, ctx: ctx, store: store}
 }
@@ -28,7 +27,13 @@ func NewFactsModule(vm *goja.Runtime, ctx context.Context, store *fact.Store) *F
 func (m *FactsModule) Export() *goja.Object {
 	obj := m.vm.NewObject()
 	_ = obj.Set("os", m.osObject())
-	_ = obj.Set("homebrew", m.homebrewObject())
+	var homebrew *goja.Object
+	_ = obj.DefineAccessorProperty("homebrew", m.vm.ToValue(func(goja.FunctionCall) goja.Value {
+		if homebrew == nil {
+			homebrew = m.homebrewObject()
+		}
+		return homebrew
+	}), nil, goja.FLAG_TRUE, goja.FLAG_TRUE)
 	_ = obj.Set("file", m.fileFunc())
 	_ = obj.Set("dir", m.dirFunc())
 	return obj
@@ -55,8 +60,7 @@ func (m *FactsModule) homebrewObject() *goja.Object {
 
 	brewInfo, err := fact.Get(m.ctx, m.store, "homebrew", fact.HomebrewCollector{})
 	if err != nil {
-		_ = obj.Set("available", false)
-		return obj
+		panic(m.vm.NewGoError(err))
 	}
 
 	_ = obj.Set("available", brewInfo.Available)

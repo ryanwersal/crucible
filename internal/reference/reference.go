@@ -494,7 +494,11 @@ Pre-collected OS information object:
 
 ## c.facts.homebrew
 
-Pre-collected Homebrew state object:
+Homebrew state object, collected on first access and cached for the plan.
+Collection failures are errors; available is false only when brew is not installed.
+Certificate-only plans do not collect Homebrew or Mac App Store facts.
+
+Properties:
 - available: boolean — whether brew is installed
 - formulae: string[] — installed formula names
 - casks: string[] — installed cask names
@@ -502,8 +506,8 @@ Pre-collected Homebrew state object:
 - outdated: object — map keyed by canonical package name (one entry per
   outdated package, regardless of how many aliases it has) →
   { name, installedVersion, currentVersion, isCask, pinned, autoUpdates }.
-  Populated when ` + "`crucible apply`" + ` has refreshed the tap index (default;
-  ` + "`--no-refresh`" + ` skips the refresh).
+  Computed from Homebrew metadata after refreshing the tap index by default;
+  ` + "`--no-refresh`" + ` uses existing metadata without refreshing.
 
 ## c.facts.file(path)
 

@@ -116,25 +116,11 @@ func (e *Engine) Plan(ctx context.Context) (action.PlanResult, error) {
 // planScript executes a crucible.js script and converts the resulting
 // declarations into a PlanResult by diffing against current system state.
 func (e *Engine) planScript(ctx context.Context, store *fact.Store, scriptContent []byte) (action.PlanResult, error) {
-	// Pre-collect expensive facts concurrently
-	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(3)
-
-	g.Go(func() error {
-		_, err := fact.Get(gctx, store, "os", fact.OSCollector{})
-		return err
-	})
-	g.Go(func() error {
-		_, err := fact.Get(gctx, store, "homebrew", fact.HomebrewCollector{Refresh: e.homebrewRefresh})
-		return err
-	})
-	g.Go(func() error {
-		_, err := fact.Get(gctx, store, "mas", fact.MasCollector{})
-		return err
-	})
-
-	if err := g.Wait(); err != nil {
-		return action.PlanResult{}, fmt.Errorf("pre-collect facts: %w", err)
+	// Configure refresh before either JavaScript or resource handlers request
+	// Homebrew facts. Certificate-only policies do not invoke package tools.
+	fact.SetCollector(store, "homebrew", fact.HomebrewCollector{Refresh: e.homebrewRefresh})
+	if _, err := fact.Get(ctx, store, "os", fact.OSCollector{}); err != nil {
+		return action.PlanResult{}, fmt.Errorf("collect OS facts: %w", err)
 	}
 
 	// Create and execute script runtime
