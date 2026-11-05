@@ -30,7 +30,12 @@ Then run from your dotfiles directory:
 ```
 crucible apply --dry-run   # show what would change
 crucible apply             # apply changes
+crucible apply --show-plan  # show the detailed plan, then apply changes
 ```
+
+Normal applies hide the detailed plan and keep confirmation and progress output.
+Use `--show-plan` to include it; `--dry-run` always shows the plan without applying.
+Destructive operations still show their details and require explicit confirmation.
 
 Source is always the current directory. Target is always `$HOME`. No script? The current
 directory is mirrored into `$HOME` as-is (backward compatible).

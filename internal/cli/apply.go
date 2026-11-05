@@ -24,6 +24,7 @@ func newApplyCmd(opts *rootOpts) *cobra.Command {
 		scriptFile  string
 		concurrency int
 		noRefresh   bool
+		showPlan    bool
 	)
 
 	cmd := &cobra.Command{
@@ -64,8 +65,10 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 			if err != nil {
 				return err
 			}
-			printResult(w, result)
-			_, _ = fmt.Fprintln(w)
+			if showPlan || dryRun {
+				printResult(w, result)
+				_, _ = fmt.Fprintln(w)
+			}
 
 			if len(result.Actions) == 0 {
 				_, _ = fmt.Fprintln(w, "Everything up to date.")
@@ -85,8 +88,7 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 			eng.SetOutput(w, errw)
 
 			if !yes {
-				_, _ = fmt.Fprintf(errw, "%d action(s) will be taken:\n", len(result.Actions))
-				printActions(errw, result.Actions)
+				_, _ = fmt.Fprintf(errw, "%d action(s) will be taken.\n", len(result.Actions))
 				if result.RequiresSudo() {
 					_, _ = fmt.Fprintln(errw, sudoNotice)
 				}
@@ -168,6 +170,7 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 	}
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be done without making changes")
+	cmd.Flags().BoolVar(&showPlan, "show-plan", false, "show the detailed plan before applying (always shown with --dry-run)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompt")
 	cmd.Flags().StringVarP(&scriptFile, "file", "f", "", "path to a crucible.js script (default: ./crucible.js)")
 	cmd.Flags().IntVar(&concurrency, "concurrency", 4, "max parallel actions (1 for sequential)")
@@ -175,7 +178,7 @@ your crucible.js, or use --file to specify a script located elsewhere.`,
 	return cmd
 }
 
-const sudoNotice = "Actions marked [sudo] need administrator privileges; sudo may prompt while these actions run, before the live display starts."
+const sudoNotice = "Some actions need administrator privileges; sudo may prompt while these actions run, before the live display starts."
 
 // readConfirmation reads a single line from stdin and reports whether it
 // (case-insensitively, trimmed) matches one of the accepted strings. Returns
