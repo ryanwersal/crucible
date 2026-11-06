@@ -1,6 +1,6 @@
 # Crucible
 
-Go CLI tool targeting Go 1.26. See `docs/implementation/` for detailed coding standards.
+Go CLI tool targeting Go 1.27.3. See `docs/implementation/` for detailed coding standards.
 
 ## Key conventions
 

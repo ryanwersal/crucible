@@ -27,6 +27,8 @@ jobs:
 
       - run: mise run test
 
+      - run: mise run vuln
+
       - run: goreleaser release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

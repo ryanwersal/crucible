@@ -82,8 +82,8 @@ Checklist:
 1. **`-trimpath`** — removes local filesystem paths from the binary.
 2. **`{{.CommitDate}}`** not `{{.Date}}` — build timestamp is deterministic from git history.
 3. **`mod_timestamp: "{{.CommitTimestamp}}"`** — file modification times in archives are deterministic.
-4. **`CGO_ENABLED=0`** — pure Go binary, no system C library dependency.
-5. **Pin Go version** in `go.mod` (`go 1.26`) and CI.
+4. **`CGO_ENABLED=1`** — macOS builds link the system frameworks used by native resources.
+5. **Pin Go version** in `go.mod` (`go 1.27.3`) and `.mise.toml`, which CI uses.
 
 ## Development Build
 

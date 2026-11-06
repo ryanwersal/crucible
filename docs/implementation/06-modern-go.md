@@ -1,8 +1,8 @@
 # Modern Go Features
 
-Target **Go 1.26** (released Feb 2026). Use modern features where they improve clarity and correctness.
+Target **Go 1.27.3**. Use modern features where they improve clarity and correctness.
 
-## Go 1.26: Latest Features
+## Go 1.26 Features Used by the Project
 
 ### `new(expr)` syntax
 

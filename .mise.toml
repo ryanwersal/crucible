@@ -1,8 +1,9 @@
 [tools]
-go = "1.26.1"
-golangci-lint = "2.11.3"
+go = "1.27.3"
+golangci-lint = "2.15.0"
 goreleaser = "2.15.3"
 svu = "3.4.0"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.9.0"
 
 [tasks.build]
 description = "Build crucible binary to bin/crucible"
@@ -15,7 +16,11 @@ go build -ldflags "-s -w -X github.com/ryanwersal/crucible/internal/cli.version=
 
 [tasks.test]
 description = "Run all tests"
-run = "go test ./..."
+run = "go test -race ./..."
+
+[tasks.vuln]
+description = "Check reachable Go vulnerabilities"
+run = "govulncheck ./..."
 
 [tasks.fmt]
 description = "Format all Go source files"
@@ -34,8 +39,8 @@ description = "Run golangci-lint"
 run = "golangci-lint run ./..."
 
 [tasks.check]
-description = "Run all checks (lint + test)"
-depends = ["lint", "test"]
+description = "Run all checks (lint + test + vulnerability scan)"
+depends = ["lint", "test", "vuln"]
 
 [tasks.release]
 description = "Bump version (major|minor|patch), tag, and push — triggers GH release + Homebrew tap update"
