@@ -6,6 +6,8 @@ import (
 	"io/fs"
 	"slices"
 	"sync"
+
+	"github.com/ryanwersal/crucible/internal/softwareupdate"
 )
 
 // State indicates whether a declaration should be present or absent.
@@ -41,6 +43,7 @@ const (
 	MacOS
 	HomebrewTap
 	CertBundle
+	SoftwareUpdate
 )
 
 var typeNames sync.Map
@@ -58,6 +61,7 @@ func (t Type) String() string {
 
 // Declaration represents a single desired-state entry produced by a script.
 type Declaration struct {
+	SoftwareUpdate         softwareupdate.Request
 	CertAbsent             []string // CertBundle: exact SHA-256 certificate fingerprints
 	CertSudo               bool
 	Type                   Type

@@ -6,6 +6,8 @@ import (
 	"io/fs"
 	"slices"
 	"sync"
+
+	"github.com/ryanwersal/crucible/internal/softwareupdate"
 )
 
 // Type identifies the kind of action to perform.
@@ -43,6 +45,7 @@ const (
 	UninstallVSCodeExtension
 	SetMacOSTweak
 	FilterCertBundle
+	InstallSoftwareUpdate
 )
 
 var typeNames sync.Map
@@ -60,6 +63,8 @@ func (t Type) String() string {
 
 // Action is an inert description of a change to apply.
 type Action struct {
+	SoftwareUpdate          softwareupdate.Update
+	SoftwareUpdateRequest   softwareupdate.Request
 	CertAbsent              []string
 	CertSnapshot            string
 	Type                    Type

@@ -60,6 +60,9 @@ func (m *CrucibleModule) Export(facts *FactsModule) *goja.Object {
 	_ = obj.Set("macos", m.macos)
 	_ = obj.Set("script", m.script)
 	_ = obj.Set("certBundle", m.certBundle)
+	softwareUpdate := m.vm.ToValue(m.softwareUpdate).ToObject(m.vm)
+	_ = softwareUpdate.Set("commandLineTools", m.commandLineTools)
+	_ = obj.Set("softwareUpdate", softwareUpdate)
 	_ = obj.Set("log", m.log)
 	if facts != nil {
 		_ = obj.Set("facts", facts.Export())

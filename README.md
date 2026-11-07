@@ -40,6 +40,27 @@ Destructive operations still show their details and require explicit confirmatio
 Source is always the current directory. Target is always `$HOME`. No script? The current
 directory is mirrored into `$HOME` as-is (backward compatible).
 
+## Apple Software Update
+
+On macOS, manage individual Apple updates separately from Homebrew packages:
+
+```javascript
+if (c.facts.os.name === "darwin") {
+    c.softwareUpdate.commandLineTools(); // Install if missing; preserve selected Xcode.
+    c.softwareUpdate("Safari", { match: "prefix" }); // Latest compatible offer.
+}
+```
+
+Use `state: "latest"` on the CLT helper to follow updates. Generic selectors can
+match exact titles, title prefixes, or exact catalog labels. `state: "present"`
+requires a `receipt` package ID. Dry runs scan the catalog without installing;
+CLT discovery temporarily uses the same install-on-demand marker as Homebrew.
+Only selected labels are installed. Restart-requiring updates need explicit
+`restart: true`; run those in a dedicated apply. The existing sudo authentication,
+confirmation, and progress handling apply. Apple may require additional owner
+authentication. No GUI fallback, automatic Xcode switching, or bulk `--all` update
+is performed. Run `crucible reference` for all options and failure behavior.
+
 ## Install
 
 ```

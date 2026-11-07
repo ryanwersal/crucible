@@ -183,6 +183,7 @@ func newDefaultRegistry() *Registry {
 	// Batch handlers
 	r.RegisterBatchHandler(PackageHandler{})
 	r.RegisterBatchHandler(HomebrewTapHandler{})
+	r.RegisterBatchHandler(SoftwareUpdateHandler{})
 	r.RegisterBatchHandler(FontHandler{})
 	r.RegisterBatchHandler(MiseToolHandler{Resolver: fact.MiseResolver{}})
 	r.RegisterBatchHandler(MasHandler{})
@@ -192,6 +193,7 @@ func newDefaultRegistry() *Registry {
 	// Action executors
 	r.RegisterExecutor(WriteFileExecutor{})
 	r.RegisterExecutor(FilterCertBundleExecutor{})
+	r.RegisterExecutor(InstallSoftwareUpdateExecutor{})
 	r.RegisterExecutor(CreateDirExecutor{})
 	r.RegisterExecutor(CreateSymlinkExecutor{})
 	r.RegisterExecutor(SetPermissionsExecutor{})

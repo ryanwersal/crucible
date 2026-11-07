@@ -422,6 +422,52 @@ Examples:
   c.vscode(["esbenp.prettier-vscode", "dbaeumer.vscode-eslint"])
   c.vscode("publisher.extension", { state: "absent" })
 
+## c.softwareUpdate(name, options?)
+
+Manage explicitly selected Apple Software Update packages on macOS. This is not
+Homebrew, App Store installation, or a full macOS installer download.
+
+Options:
+- state: "latest" (default) installs the newest matching offered version;
+  "present" skips installation when the specified package receipt exists.
+- match: "title" (default) matches an exact catalog title, "prefix" matches a
+  title prefix, or "label" matches an exact softwareupdate --list label.
+- receipt: optional pkgutil receipt ID; required for "present". A missing receipt
+  with no matching offer fails rather than claiming the software is installed.
+- restart: false (default). Updates whose metadata requires restart/shutdown fail
+  planning unless true. True authorizes --restart for those updates only.
+
+Only selected labels are installed, never --all. Numeric versions are ordered
+numerically; ambiguous versions require an exact label. Catalog and receipt
+errors fail the plan. No matching offer without a receipt is reported as such,
+not as proof of installation. Execution rechecks the approved label and metadata,
+then verifies receipts (when specified) and that the installed label is no longer
+offered. Restarting updates cannot be verified before the process is interrupted.
+Updates run serially with sudo and streamed progress. Apple may require interactive
+volume-owner authentication for OS updates. Crucible neither supplies passwords nor
+bypasses Apple's licensing/authentication requirements. A restart may interrupt
+other work; use a dedicated apply for restart-requiring updates.
+
+  c.softwareUpdate("Safari", { match: "prefix" })
+  c.softwareUpdate("Example Update-1.2", { match: "label", receipt: "com.example.pkg", state: "present" })
+
+### c.softwareUpdate.commandLineTools(options?)
+
+Convenience declaration with the CLT title prefix, package receipt and compiler/SDK
+checks. Defaults to state: "present"; accepts state and restart only. Use "latest"
+to follow the newest compatible offer. Preserves the selected Xcode developer
+path. An existing receipt with missing tools is incomplete, not satisfied.
+
+  c.softwareUpdate.commandLineTools({ state: "latest" })
+
+Discovery temporarily uses Apple's undocumented install-on-demand marker, as
+Homebrew does. Even a dry run may scan Apple's catalog and briefly create that
+marker, but never installs anything. Crucible removes only its own marker on
+success, failure, or cancellation; pre-existing regular markers are left alone.
+If Apple offers no compatible installer, the plan fails with a manual-download
+explanation. No GUI fallback is launched. Non-macOS declarations fail; guard with
+c.facts.os.name === "darwin" in cross-platform scripts.
+
 ## c.certBundle(path, options)
 
 Remove exact certificates from an existing PEM bundle, retaining all other bytes.
@@ -585,6 +631,7 @@ func writeTemplateData(b *strings.Builder) {
 }
 
 var declTypeDescriptions = map[decl.Type]string{
+	decl.SoftwareUpdate:  "Apple Software Update — explicitly selected packages or Command Line Tools",
 	decl.CertBundle:      "PEM certificate bundle — exact denied certificates kept absent",
 	decl.File:            "Managed file — created or updated with specified content, source, or template",
 	decl.Dir:             "Managed directory — created with specified permissions",
@@ -622,6 +669,7 @@ func writeDeclTypes(b *strings.Builder, reg *resource.Registry) {
 }
 
 var actionTypeDescriptions = map[action.Type]string{
+	action.InstallSoftwareUpdate:    "Install an approved Apple update label with optional explicit restart",
 	action.FilterCertBundle:         "Remove denied certificates with snapshot validation, backup, and atomic replacement",
 	action.WriteFile:                "Write or update a file's content",
 	action.CreateDir:                "Create a directory",
