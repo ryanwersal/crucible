@@ -14,10 +14,10 @@ type PlanResult struct {
 	Observations []Observation
 }
 
-// RequiresSudo reports whether any planned action needs privilege escalation.
+// RequiresSudo reports whether any planned action needs or may request privilege escalation.
 func (r PlanResult) RequiresSudo() bool {
 	for _, a := range r.Actions {
-		if a.NeedsSudo {
+		if a.NeedsSudo || a.MayPromptSudo {
 			return true
 		}
 	}

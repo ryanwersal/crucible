@@ -280,7 +280,7 @@ func (e *Engine) ApplyResultWithOptions(ctx context.Context, result action.PlanR
 	for _, chain := range groupChains(indexed) {
 		var needsSudo, needsShell bool
 		for _, ia := range chain {
-			needsSudo = needsSudo || ia.action.NeedsSudo
+			needsSudo = needsSudo || ia.action.NeedsSudo || ia.action.MayPromptSudo
 			needsShell = needsShell || ia.action.Type == action.SetShell
 		}
 		switch {

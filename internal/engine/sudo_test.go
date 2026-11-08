@@ -197,3 +197,55 @@ func TestPrivilegedChainRunsBeforeRenderer(t *testing.T) {
 		t.Fatalf("order=%s", got)
 	}
 }
+
+// Homebrew must keep the original terminal for its nested sudo, without being
+// wrapped in sudo itself or hidden behind the renderer (even if PTY is set).
+func TestHomebrewNestedSudoBeforeRenderer(t *testing.T) {
+	for _, denied := range []bool{false, true} {
+		t.Run(fmt.Sprintf("denied=%t", denied), func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("SUDO_TEST_DIR", dir)
+			t.Setenv("DENIED", fmt.Sprint(denied))
+			mustWriteFile(t, filepath.Join(dir, "brew"), []byte(`#!/bin/sh
+case "$1" in
+ tap) exit 0 ;;
+ ruby) exec sudo nested-cask-cleanup ;;
+ *) exit 80 ;;
+esac
+`), 0o755)
+			mustWriteFile(t, filepath.Join(dir, "sudo"), []byte(`#!/bin/sh
+[ "$1" = nested-cask-cleanup ] || exit 81
+[ -t 0 ] || exit 82
+[ ! -f "$SUDO_TEST_DIR/renderer" ] || exit 83
+printf 'Password prompt from Homebrew\n' >&2
+[ "$DENIED" = false ] || exit 84
+touch "$SUDO_TEST_DIR/executed"
+`), 0o755)
+			master, terminal, err := pty.Open()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = master.Close() }()
+			defer func() { _ = terminal.Close() }()
+			eng := New(dir, dir, slog.New(slog.DiscardHandler))
+			eng.SetInput(terminal)
+			var output strings.Builder
+			eng.SetOutput(&output, &output)
+			result, err := eng.ApplyResultWithOptions(t.Context(), action.PlanResult{Actions: []action.Action{
+				{Type: action.UninstallPackage, PackageName: "spotify", PackageKind: "cask", MayPromptSudo: true, PTY: true},
+			}}, ApplyOptions{Interactive: true, BeforeActions: func() {
+				mustWriteFile(t, filepath.Join(dir, "renderer"), nil, 0o644)
+			}})
+			if (err != nil) != denied || !strings.Contains(output.String(), "Password prompt from Homebrew") {
+				t.Fatalf("result=%+v err=%v output=%s", result, err, output.String())
+			}
+			for _, name := range []string{"renderer", "executed"} {
+				_, statErr := os.Stat(filepath.Join(dir, name))
+				if (statErr == nil) == denied {
+					t.Fatalf("%s: denied=%t stat=%v", name, denied, statErr)
+				}
+			}
+		})
+	}
+}

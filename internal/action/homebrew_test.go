@@ -329,3 +329,37 @@ func TestShortName(t *testing.T) {
 		}
 	}
 }
+
+func TestHomebrewPromptPlanning(t *testing.T) {
+	t.Parallel()
+	for _, kind := range []string{"cask", "", "formula"} {
+		for _, operation := range []string{"install", "upgrade", "uninstall"} {
+			t.Run(kind+"/"+operation, func(t *testing.T) {
+				actual := &fact.HomebrewInfo{Available: true, Formulae: map[string]bool{}, Casks: map[string]bool{}}
+				pkg := DesiredPackage{Name: "spotify", Kind: kind}
+				if operation != "install" {
+					if kind == "formula" {
+						actual.Formulae[pkg.Name] = true
+					} else {
+						actual.Casks[pkg.Name] = true
+					}
+				}
+				pkg.Absent = operation == "uninstall"
+				pkg.Latest = operation == "upgrade"
+				actual.Outdated = map[string]OutdatedPackage{pkg.Name: {IsCask: kind != "formula", InstalledVersion: "1", CurrentVersion: "2"}}
+				actions, _, _, err := DiffHomebrew([]DesiredPackage{pkg}, actual)
+				if err != nil || len(actions) != 1 {
+					t.Fatalf("actions=%v err=%v", actions, err)
+				}
+				a := actions[0]
+				wantPrompt := kind != "formula"
+				if a.NeedsSudo || a.MayPromptSudo != wantPrompt || (PlanResult{Actions: actions}).RequiresSudo() != wantPrompt {
+					t.Fatalf("unexpected privilege classification: %+v", a)
+				}
+				if wantPrompt && a.Note == "" {
+					t.Fatal("missing advance notice")
+				}
+			})
+		}
+	}
+}

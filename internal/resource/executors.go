@@ -25,7 +25,7 @@ func buildCmd(ctx context.Context, a action.Action, stdin io.Reader, stdout, std
 		name = "sudo"
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
-	if a.NeedsSudo && stdin != nil {
+	if (a.NeedsSudo || a.MayPromptSudo) && stdin != nil {
 		cmd.Stdin = stdin
 	}
 	cmd.Stdout = stdout

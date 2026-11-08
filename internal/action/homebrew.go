@@ -109,6 +109,15 @@ func DiffHomebrew(desired []DesiredPackage, actual *fact.HomebrewInfo) ([]Action
 		})
 		noted[pkg.Name] = true
 	}
+	// Casks can invoke sudo from installers, uninstall hooks, or filesystem
+	// operations. Auto-selected packages may resolve to casks too. Keep their
+	// terminal available without running Homebrew itself as root.
+	for i := range actions {
+		if actions[i].PackageKind != "formula" {
+			actions[i].MayPromptSudo = true
+			actions[i].Note = "Homebrew may request administrator privileges; runs before the live display."
+		}
+	}
 	return actions, obs, noted, nil
 }
 

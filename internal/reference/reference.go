@@ -170,6 +170,12 @@ disabled during package operations; run brew cleanup separately for maintenance.
 Automatic dependent upgrades are disabled
 for these commands; manage desired upgrades explicitly with state: "latest".
 
+Cask operations and packages using automatic kind selection may invoke sudo
+internally (for example, Spotify's service cleanup). The plan flags this before
+apply. Their Homebrew dependency chain runs serially before the live display,
+with terminal input available for Homebrew's own password prompts. Homebrew
+itself still runs as the current user; no sudo credential cache is required.
+
 Options:
 - state: "present" (default) — install if missing
 - state: "absent" — uninstall if present

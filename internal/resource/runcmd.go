@@ -77,7 +77,7 @@ func runCmdEnv(ctx context.Context, a action.Action, stdin io.Reader, stdout, st
 	// so the single writer captures both (every PTY caller passes the same
 	// writer for both anyway). Privileged commands retain the original terminal
 	// because a new PTY would select a different sudo timestamp record.
-	if a.PTY && !a.NeedsSudo {
+	if a.PTY && !a.NeedsSudo && !a.MayPromptSudo {
 		return runCmdPTYEnv(ctx, a, stdout, env, name, args...)
 	}
 
