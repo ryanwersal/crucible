@@ -46,6 +46,7 @@ const (
 	SetMacOSTweak
 	FilterCertBundle
 	InstallSoftwareUpdate
+	StoreSSHKeychain
 )
 
 var typeNames sync.Map
@@ -117,6 +118,7 @@ type Action struct {
 	HFInclude               []string // DownloadHF: --include globs
 	HFExclude               []string // DownloadHF: --exclude globs
 	HFRevision              string   // DownloadHF: git revision/branch/tag
+	NeedsTerminal           bool     // action needs direct terminal input before progress rendering
 	NeedsSudo               bool     // action requires privilege escalation
 	MayPromptSudo           bool     // command may invoke sudo internally; do not elevate the command itself
 	PTY                     bool     // run the subprocess under a pseudo-terminal so it emits TTY-style live progress (used for large downloads); honored only in interactive mode

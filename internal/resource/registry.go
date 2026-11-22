@@ -177,6 +177,7 @@ func newDefaultRegistry() *Registry {
 	r.RegisterHandler(KeyRemapHandler{})
 	r.RegisterHandler(DisplayHandler{})
 	r.RegisterHandler(ScriptHandler{})
+	r.RegisterHandler(SSHKeychainHandler{})
 	r.RegisterHandler(HFDownloadHandler{})
 	r.RegisterHandler(MacOSHandler{})
 
@@ -219,6 +220,7 @@ func newDefaultRegistry() *Registry {
 	r.RegisterExecutor(RemoveKeyRemapExecutor{})
 	r.RegisterExecutor(SetDisplayExecutor{})
 	r.RegisterExecutor(RunScriptExecutor{})
+	r.RegisterExecutor(StoreSSHKeychainExecutor{})
 	// Pull and remove share one server manager so a temporary `ollama serve` is
 	// started at most once per run and torn down once via Registry.Close.
 	ollamaSrv := &ollamaServer{}

@@ -474,6 +474,29 @@ If Apple offers no compatible installer, the plan fails with a manual-download
 explanation. No GUI fallback is launched. Non-macOS declarations fail; guard with
 c.facts.os.name === "darwin" in cross-platform scripts.
 
+## c.keychain.sshKey(path)
+
+Ensure an existing SSH private key can be unlocked through macOS Keychain.
+Pass an absolute path or one beginning with ~/. Missing or malformed keys fail;
+this resource does not generate keys or accept passwords in configuration.
+
+Planning uses Apple ssh-add in a temporary agent with prompting disabled. It
+checks the actual key, independently of identities in the user's running agent,
+and does not write passphrases. Keys without a passphrase need no enrollment.
+If Keychain cannot unlock the key, apply runs ssh-add --apple-use-keychain in
+another temporary agent, directly on the user's terminal before progress starts.
+It rechecks afterward using a fresh agent, so success requires retained Keychain
+access. No sudo, stored credential value, or command replay is involved.
+
+A missing passphrase requires interactive apply, even with --yes. A locked or
+unavailable Keychain may need unlocking before enrollment can succeed. Passphrase
+rotation is detected by the next probe. Existing shell/SSH configuration should
+use UseKeychain yes and AddKeysToAgent yes for subsequent connections.
+Non-macOS use fails; guard the declaration for cross-platform configurations.
+
+Example:
+  if (c.facts.os.name === "darwin") c.keychain.sshKey("~/.ssh/id_ed25519");
+
 ## c.certBundle(path, options)
 
 Remove exact certificates from an existing PEM bundle, retaining all other bytes.
@@ -637,6 +660,7 @@ func writeTemplateData(b *strings.Builder) {
 }
 
 var declTypeDescriptions = map[decl.Type]string{
+	decl.SSHKeychain:     "SSH private-key passphrase enrollment in macOS Keychain",
 	decl.SoftwareUpdate:  "Apple Software Update — explicitly selected packages or Command Line Tools",
 	decl.CertBundle:      "PEM certificate bundle — exact denied certificates kept absent",
 	decl.File:            "Managed file — created or updated with specified content, source, or template",
@@ -675,6 +699,7 @@ func writeDeclTypes(b *strings.Builder, reg *resource.Registry) {
 }
 
 var actionTypeDescriptions = map[action.Type]string{
+	action.StoreSSHKeychain:         "Store an SSH passphrase interactively through Apple ssh-add",
 	action.InstallSoftwareUpdate:    "Install an approved Apple update label with optional explicit restart",
 	action.FilterCertBundle:         "Remove denied certificates with snapshot validation, backup, and atomic replacement",
 	action.WriteFile:                "Write or update a file's content",

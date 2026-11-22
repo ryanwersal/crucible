@@ -249,3 +249,25 @@ touch "$SUDO_TEST_DIR/executed"
 		})
 	}
 }
+
+func TestUserPromptRunsBeforeRendererWithoutSudo(t *testing.T) {
+	var order []string
+	executor := &testExecutor{execFn: func(_ context.Context, a action.Action, _, _ io.Writer) error {
+		if a.NeedsSudo {
+			t.Fatal("user prompt escalated privileges")
+		}
+		order = append(order, a.Description)
+		return nil
+	}}
+	eng := newTestEngine(t, executor)
+	result, err := eng.ApplyResultWithOptions(t.Context(), action.PlanResult{Actions: []action.Action{
+		{Type: action.WriteFile, Description: "ordinary"},
+		{Type: action.WriteFile, Description: "keychain", NeedsTerminal: true},
+	}}, ApplyOptions{BeforeActions: func() { order = append(order, "renderer") }})
+	if err != nil || len(result.Errors()) != 0 {
+		t.Fatalf("result=%+v error=%v", result, err)
+	}
+	if strings.Join(order, ",") != "keychain,renderer,ordinary" {
+		t.Fatalf("order=%v", order)
+	}
+}

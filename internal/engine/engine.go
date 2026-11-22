@@ -276,16 +276,16 @@ func (e *Engine) ApplyResultWithOptions(ctx context.Context, result action.PlanR
 	// Commands that may prompt run while the terminal is available. Keep whole
 	// dependency chains together so moving a sudo command cannot move it ahead
 	// of an earlier action on the same path or serial group.
-	var concurrent, privileged, sequential []indexedAction
+	var concurrent, terminalFirst, sequential []indexedAction
 	for _, chain := range groupChains(indexed) {
-		var needsSudo, needsShell bool
+		var needsTerminal, needsShell bool
 		for _, ia := range chain {
-			needsSudo = needsSudo || ia.action.NeedsSudo || ia.action.MayPromptSudo
+			needsTerminal = needsTerminal || ia.action.NeedsSudo || ia.action.MayPromptSudo || ia.action.NeedsTerminal
 			needsShell = needsShell || ia.action.Type == action.SetShell
 		}
 		switch {
-		case needsSudo:
-			privileged = append(privileged, chain...)
+		case needsTerminal:
+			terminalFirst = append(terminalFirst, chain...)
 		case needsShell:
 			sequential = append(sequential, chain...)
 		default:
@@ -293,7 +293,7 @@ func (e *Engine) ApplyResultWithOptions(ctx context.Context, result action.PlanR
 		}
 	}
 
-	if err := e.runTerminalActions(ctx, privileged, results, opts.Observer); err != nil {
+	if err := e.runTerminalActions(ctx, terminalFirst, results, opts.Observer); err != nil {
 		return ApplyResult{Results: results}, err
 	}
 

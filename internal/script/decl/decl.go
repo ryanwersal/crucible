@@ -44,6 +44,7 @@ const (
 	HomebrewTap
 	CertBundle
 	SoftwareUpdate
+	SSHKeychain
 )
 
 var typeNames sync.Map
